@@ -1,0 +1,2457 @@
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import {
+  ShoppingCart, Plug, Home, Car, HeartPulse, Blocks, PawPrint,
+  UtensilsCrossed, Clapperboard, Shirt, Gift, CircleEllipsis,
+  ChevronLeft, ChevronRight, Trash2, Download, Settings, PieChart,
+  List, ArrowUpRight, ArrowDownRight, X, Check, Repeat, KeyRound,
+  Delete, RefreshCw, AlertCircle, Upload, Save, PlusCircle, Briefcase, Lock,
+  Sparkles, Pencil, CalendarDays, Wrench, Target, Ban
+} from "lucide-react";
+import * as XLSX from "xlsx";
+
+/* ================================================================== */
+/* Design system                                                       */
+/* ================================================================== */
+
+const C = {
+  papel:     "#FFFFFF",
+  suave:     "#EDF6F9",
+  quente:    "#FFDDD2",
+  tinta:     "#0B3B41",
+  tinta2:    "#3F646B",
+  linha:     "#C5DAE1",
+  acento:    "#006D77",
+  aqua:      "#83C5BE",
+  tangerina: "#E29578",
+  gasto:     "#B04E2B",
+};
+
+const TAGS = [
+  { id: "mercado",    nome: "Mercado",         cor: "#7FC8A9", Icon: ShoppingCart },
+  { id: "contas",     nome: "Casa e contas",   cor: "#86C5D8", Icon: Plug },
+  { id: "moradia",    nome: "Moradia",         cor: "#A9A6D8", Icon: Home },
+  { id: "transporte", nome: "Transporte",      cor: "#F0B775", Icon: Car },
+  { id: "saude",      nome: "Saúde",           cor: "#F09CA8", Icon: HeartPulse },
+  { id: "caetano",    nome: "Caetano",         cor: "#BFD97F", Icon: Blocks },
+  { id: "pets",       nome: "Pets",            cor: "#7FD4CE", Icon: PawPrint },
+  { id: "comida",     nome: "Restaurante",     cor: "#F2A48A", Icon: UtensilsCrossed },
+  { id: "lazer",      nome: "Lazer",           cor: "#A8BCE8", Icon: Clapperboard },
+  { id: "pessoal",    nome: "Compras",         cor: "#D4B48C", Icon: Shirt },
+  { id: "servicos",   nome: "Serviços",        cor: "#E5A6CE", Icon: Wrench },
+  { id: "outros",     nome: "Outros",          cor: "#BFC8CC", Icon: CircleEllipsis },
+];
+
+const TAGS_RECEITA = [
+  { id: "salario", nome: "Salário",     cor: "#7FC8A9", Icon: Briefcase },
+  { id: "extra",   nome: "Renda extra", cor: "#86C5D8", Icon: Sparkles },
+];
+
+const tagPorId = (id) => TAGS.find((t) => t.id === id) || TAGS[TAGS.length - 1];
+const nomeReceita = (id) => (TAGS_RECEITA.find((t) => t.id === id) || TAGS_RECEITA[0]).nome;
+
+/* ================================================================== */
+/* Criptografia e armazenamento                                        */
+/* ================================================================== */
+
+const CHAVE_COFRE = "contas-da-casa:cofre";
+
+const KC = [
+  0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+  0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+  0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+  0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+  0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+  0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+  0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+  0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
+];
+
+function sha256(bytes) {
+  const l = bytes.length;
+  const padLen = ((l + 1 + 8 + 63) & ~63);
+  const m = new Uint8Array(padLen);
+  m.set(bytes); m[l] = 0x80;
+  const bits = l * 8;
+  const dv = new DataView(m.buffer);
+  dv.setUint32(padLen - 4, bits >>> 0, false);
+  dv.setUint32(padLen - 8, Math.floor(bits / 4294967296), false);
+  let h0=0x6a09e667,h1=0xbb67ae85,h2=0x3c6ef372,h3=0xa54ff53a,
+      h4=0x510e527f,h5=0x9b05688c,h6=0x1f83d9ab,h7=0x5be0cd19;
+  const w = new Uint32Array(64);
+  for (let i = 0; i < padLen; i += 64) {
+    for (let j = 0; j < 16; j++) w[j] = dv.getUint32(i + j * 4, false);
+    for (let j = 16; j < 64; j++) {
+      const a = w[j-15], b = w[j-2];
+      const s0 = ((a>>>7)|(a<<25)) ^ ((a>>>18)|(a<<14)) ^ (a>>>3);
+      const s1 = ((b>>>17)|(b<<15)) ^ ((b>>>19)|(b<<13)) ^ (b>>>10);
+      w[j] = (w[j-16] + s0 + w[j-7] + s1) >>> 0;
+    }
+    let a=h0,b=h1,c=h2,d=h3,e=h4,f=h5,g=h6,h=h7;
+    for (let j = 0; j < 64; j++) {
+      const S1 = ((e>>>6)|(e<<26)) ^ ((e>>>11)|(e<<21)) ^ ((e>>>25)|(e<<7));
+      const ch = (e & f) ^ (~e & g);
+      const t1 = (h + S1 + ch + KC[j] + w[j]) >>> 0;
+      const S0 = ((a>>>2)|(a<<30)) ^ ((a>>>13)|(a<<19)) ^ ((a>>>22)|(a<<10));
+      const mj = (a & b) ^ (a & c) ^ (b & c);
+      const t2 = (S0 + mj) >>> 0;
+      h=g; g=f; f=e; e=(d+t1)>>>0; d=c; c=b; b=a; a=(t1+t2)>>>0;
+    }
+    h0=(h0+a)>>>0; h1=(h1+b)>>>0; h2=(h2+c)>>>0; h3=(h3+d)>>>0;
+    h4=(h4+e)>>>0; h5=(h5+f)>>>0; h6=(h6+g)>>>0; h7=(h7+h)>>>0;
+  }
+  const out = new Uint8Array(32);
+  const odv = new DataView(out.buffer);
+  [h0,h1,h2,h3,h4,h5,h6,h7].forEach((v, i) => odv.setUint32(i * 4, v, false));
+  return out;
+}
+
+const juntar = (...arrs) => {
+  const out = new Uint8Array(arrs.reduce((s, a) => s + a.length, 0));
+  let o = 0;
+  for (const a of arrs) { out.set(a, o); o += a.length; }
+  return out;
+};
+
+const b64 = {
+  enc: (buf) => {
+    const u = new Uint8Array(buf);
+    let s = "";
+    for (let i = 0; i < u.length; i += 4096) s += String.fromCharCode(...u.subarray(i, i + 4096));
+    return btoa(s);
+  },
+  dec: (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0)),
+};
+
+function temSubtle() {
+  try { return !!(window.crypto && window.crypto.subtle && window.crypto.subtle.importKey); }
+  catch { return false; }
+}
+
+function aleatorio(n) {
+  const a = new Uint8Array(n);
+  if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(a);
+  else for (let i = 0; i < n; i++) a[i] = Math.floor(Math.random() * 256);
+  return a;
+}
+
+async function chaveAES(senha, salt) {
+  const mat = await crypto.subtle.importKey("raw", new TextEncoder().encode(senha), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt, iterations: 150000, hash: "SHA-256" },
+    mat, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
+  );
+}
+
+function chaveLenta(senha, salt) {
+  let k = sha256(juntar(new TextEncoder().encode(senha), salt));
+  for (let i = 0; i < 30000; i++) k = sha256(k);
+  return k;
+}
+
+function keystream(k, iv, n) {
+  const out = new Uint8Array(n);
+  let o = 0, ctr = 0;
+  while (o < n) {
+    const c = new Uint8Array(4);
+    new DataView(c.buffer).setUint32(0, ctr++, false);
+    out.set(sha256(juntar(k, iv, c)).subarray(0, Math.min(32, n - o)), o);
+    o += 32;
+  }
+  return out;
+}
+
+const modoDoBlob = (blob) => (String(blob).split(".")[0] === "a1" ? "aes" : "js");
+
+async function abrirChave(senha, salt, modo) {
+  const alvo = modo || (temSubtle() ? "aes" : "js");
+  if (alvo === "aes") {
+    if (!temSubtle()) {
+      throw new Error("Esta base foi criada num navegador com recursos que este aqui não tem. Abra pelo mesmo navegador de antes.");
+    }
+    return { modo: "aes", k: await chaveAES(senha, salt) };
+  }
+  return { modo: "js", k: chaveLenta(senha, salt) };
+}
+
+async function cifrar(ch, texto) {
+  const bytes = new TextEncoder().encode(texto);
+  const iv = aleatorio(12);
+  if (ch.modo === "aes") {
+    const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, ch.k, bytes);
+    return "a1." + b64.enc(iv) + "." + b64.enc(ct);
+  }
+  const ks = keystream(ch.k, iv, bytes.length);
+  const ct = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) ct[i] = bytes[i] ^ ks[i];
+  const tag = sha256(juntar(ch.k, ct)).subarray(0, 16);
+  return "j1." + b64.enc(iv) + "." + b64.enc(ct) + "." + b64.enc(tag);
+}
+
+async function decifrar(ch, blob) {
+  const p = String(blob).split(".");
+  if (p[0] === "a1") {
+    if (ch.modo !== "aes") throw new Error("Este navegador não abre a base criada no outro aparelho.");
+    const claro = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64.dec(p[1]) }, ch.k, b64.dec(p[2]));
+    return new TextDecoder().decode(claro);
+  }
+  if (p[0] === "j1") {
+    if (ch.modo !== "js") throw new Error("Este navegador não abre a base criada no outro aparelho.");
+    const iv = b64.dec(p[1]), ct = b64.dec(p[2]), tag = b64.dec(p[3]);
+    const esperado = sha256(juntar(ch.k, ct)).subarray(0, 16);
+    for (let i = 0; i < 16; i++) if (esperado[i] !== tag[i]) throw new Error("Senha não confere.");
+    const ks = keystream(ch.k, iv, ct.length);
+    const claro = new Uint8Array(ct.length);
+    for (let i = 0; i < ct.length; i++) claro[i] = ct[i] ^ ks[i];
+    return new TextDecoder().decode(claro);
+  }
+  throw new Error("Formato de base não reconhecido.");
+}
+
+/* ================================================================== */
+/* Armazenamento                                                       */
+/* ================================================================== */
+
+const memoria = {};
+const TESTE = "contas-da-casa:teste";
+
+const guarda = {
+  modo: "memoria",
+  shared: true,
+  async detectar() {
+    if (typeof window !== "undefined" && window.storage) {
+      for (const [modo, shared] of [["compartilhado", true], ["pessoal", false]]) {
+        try {
+          const r = await window.storage.set(TESTE, "1", shared);
+          if (r) {
+            try { await window.storage.delete(TESTE, shared); } catch (e) {}
+            this.modo = modo; this.shared = shared;
+            return this.modo;
+          }
+        } catch (e) {}
+      }
+    }
+    try {
+      window.localStorage.setItem(TESTE, "1");
+      window.localStorage.removeItem(TESTE);
+      this.modo = "navegador";
+      return this.modo;
+    } catch (e) {}
+    this.modo = "memoria";
+    return this.modo;
+  },
+  async ler(k) {
+    if (this.modo === "compartilhado" || this.modo === "pessoal") {
+      try { return await window.storage.get(k, this.shared); } catch (e) { return null; }
+    }
+    if (this.modo === "navegador") {
+      try { const v = window.localStorage.getItem(k); return v ? { value: v } : null; }
+      catch (e) { return null; }
+    }
+    return memoria[k] ? { value: memoria[k] } : null;
+  },
+  async gravar(k, v) {
+    if (this.modo === "compartilhado" || this.modo === "pessoal") {
+      const r = await window.storage.set(k, v, this.shared);
+      if (!r) throw new Error("o navegador recusou a gravação");
+      return true;
+    }
+    if (this.modo === "navegador") { window.localStorage.setItem(k, v); return true; }
+    memoria[k] = v;
+    return true;
+  },
+};
+
+const AMBIENTES = {
+  compartilhado: {
+    rotulo: "base compartilhada entre os dois aparelhos",
+    aviso: "",
+    grave: false,
+  },
+  pessoal: {
+    rotulo: "base guardada neste aparelho",
+    aviso: "Este aparelho guarda a base apenas para você. A Isa não verá os seus lançamentos direto: use a cópia de segurança em Ajustes para passar a base entre vocês.",
+    grave: false,
+  },
+  navegador: {
+    rotulo: "base guardada neste navegador",
+    aviso: "A base fica salva só neste navegador, neste aparelho. Use a cópia de segurança em Ajustes para levar os lançamentos para o outro celular.",
+    grave: false,
+  },
+  memoria: {
+    rotulo: "sem gravação permanente",
+    aviso: "Este aparelho não está deixando o app gravar nada. Dá para usar tudo normalmente agora, mas ao fechar a página os lançamentos se perdem. Antes de sair, vá em Ajustes e salve a cópia de segurança.",
+    grave: true,
+  },
+};
+
+function baixarArquivo(nome, texto, tipo) {
+  const blob = texto instanceof Blob ? texto : new Blob([texto], { type: tipo || "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = nome; a.rel = "noopener";
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 2000);
+}
+
+/* ================================================================== */
+/* Utilidades                                                          */
+/* ================================================================== */
+
+const brl = (c) => (c / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const brlCurto = (c) => {
+  const v = c / 100;
+  return Math.abs(v) >= 1000
+    ? "R$ " + (v / 1000).toFixed(1).replace(".", ",") + "k"
+    : "R$ " + v.toFixed(0);
+};
+
+const MESES = ["janeiro","fevereiro","março","abril","maio","junho",
+  "julho","agosto","setembro","outubro","novembro","dezembro"];
+
+const hojeISO = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+};
+const chaveMes = (d) => d.slice(0, 7);
+const mesAnterior = (ym) => {
+  const [a, m] = ym.split("-").map(Number);
+  return m === 1 ? `${a-1}-12` : `${a}-${String(m-1).padStart(2,"0")}`;
+};
+const mesSeguinte = (ym) => {
+  const [a, m] = ym.split("-").map(Number);
+  return m === 12 ? `${a+1}-01` : `${a}-${String(m+1).padStart(2,"0")}`;
+};
+const rotuloMes = (ym) => {
+  const [a, m] = ym.split("-").map(Number);
+  return `${MESES[m-1]} de ${a}`;
+};
+const dataCurta = (iso) => iso.split("-").reverse().slice(0, 2).join("/");
+const novoId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+const COFRE_VAZIO = {
+  lancamentos: [], fixas: [], excluidos: [],
+  pessoas: ["Xan", "Isa"], ultimoExport: null, tetos: {},
+};
+
+function fundir(local, remoto) {
+  if (!remoto) return local;
+  const excl = new Set([...(local.excluidos || []), ...(remoto.excluidos || [])]);
+  const ml = new Map();
+  [...(remoto.lancamentos || []), ...(local.lancamentos || [])].forEach((l) => ml.set(l.id, l));
+  const mf = new Map();
+  [...(remoto.fixas || []), ...(local.fixas || [])].forEach((f) => mf.set(f.id, f));
+  const exports = [local.ultimoExport, remoto.ultimoExport].filter(Boolean).sort();
+  return {
+    lancamentos: [...ml.values()].filter((l) => !excl.has(l.id)),
+    fixas: [...mf.values()].filter((f) => !excl.has(f.id)),
+    excluidos: [...excl],
+    pessoas: local.pessoas || remoto.pessoas || COFRE_VAZIO.pessoas,
+    ultimoExport: exports.length ? exports[exports.length - 1] : null,
+    tetos: { ...(remoto.tetos || {}), ...(local.tetos || {}) },
+  };
+}
+
+/* ================================================================== */
+/* Artes                                                               */
+/* ================================================================== */
+
+function ArteCasaSVG({ w = 260 }) {
+  return (
+      <svg width={w} height={w * 0.4000} role="img" aria-label="Casa da família com a gata Marie, a cachorra Mia e canteiros de tulipas em forma de coração" viewBox="0 0 500 200">
+      <path d="M6 165 Q250 149 494 165 L494 176 Q250 190 6 176 Z" fill="#DCEFEA"/>
+      <path d="M14 165 Q250 150 486 165" stroke="#83C5BE" strokeWidth="2.6" fill="none" strokeLinecap="round"/>
+      <g fill="none" stroke="#9BD2CB" strokeWidth="2" strokeLinecap="round">
+      <path d="M132 170 v-6 M138 171 v-8 M144 170 v-6"/>
+      <path d="M356 170 v-6 M362 171 v-8 M368 170 v-6"/>
+      <path d="M244 174 v-6 M250 175 v-8 M256 174 v-6"/>
+      </g>
+      <g transform="translate(104,5) scale(0.86)">
+      <defs>
+      <linearGradient id="ArteCasaSVG-ceu" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stopColor="#EDF6F9"/><stop offset="1" stopColor="#DCEEF3"/>
+      </linearGradient>
+      <linearGradient id="ArteCasaSVG-telha" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stopColor="#EBA283"/><stop offset="1" stopColor="#D9825F"/>
+      </linearGradient>
+      <linearGradient id="ArteCasaSVG-parede" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stopColor="#FFFFFF"/><stop offset="1" stopColor="#F3F9FB"/>
+      </linearGradient>
+      </defs>
+      <circle cx="170" cy="112" r="104" fill="url(#ArteCasaSVG-ceu)"/>
+      <g className="ceu-dia astro"><circle cx="244" cy="56" r="18" fill="#FFDDD2"/>
+      <circle cx="244" cy="56" r="11.5" fill="#E29578" opacity=".88"/></g>
+      <g className="ceu-noite">
+      <path d="M250 44 a17 17 0 1 0 0 25 a14 14 0 0 1 0 -25z" fill="#FFF2C4" stroke="#E8D89B" strokeWidth="1.4"/>
+      <g fill="#FFF2C4" className="estrelas">
+      <path d="M96 44 l1.8 4 4 1.8 -4 1.8 -1.8 4 -1.8 -4 -4 -1.8 4 -1.8z"/>
+      <path d="M198 30 l1.4 3.2 3.2 1.4 -3.2 1.4 -1.4 3.2 -1.4 -3.2 -3.2 -1.4 3.2 -1.4z"/>
+      <path d="M62 84 l1.2 2.6 2.6 1.2 -2.6 1.2 -1.2 2.6 -1.2 -2.6 -2.6 -1.2 2.6 -1.2z"/>
+      <path d="M222 100 l1.2 2.6 2.6 1.2 -2.6 1.2 -1.2 2.6 -1.2 -2.6 -2.6 -1.2 2.6 -1.2z"/>
+      <path d="M148 22 l1.2 2.6 2.6 1.2 -2.6 1.2 -1.2 2.6 -1.2 -2.6 -2.6 -1.2 2.6 -1.2z"/>
+      </g>
+      </g>
+      <g fill="#FFFFFF" className="ceu-dia">
+      <g className="nuvem-a"><path d="M78 58 a11 11 0 0 1 20 -5 a9 9 0 0 1 16 5 h-36z"/></g>
+      <g className="nuvem-b"><path d="M216 34 a10 10 0 0 1 18 -4 a8 8 0 0 1 14 4 h-32z"/></g>
+      </g>
+      <path d="M30 186 Q170 174 310 186" fill="#DDEBEF"/>
+      <path d="M26 186 H314" stroke="#83C5BE" strokeWidth="3" strokeLinecap="round"/>
+      <rect x="58" y="128" width="9" height="58" rx="3" fill="#8A6A4A"/>
+      <circle cx="62" cy="108" r="28" fill="#83C5BE"/>
+      <circle cx="46" cy="122" r="17" fill="#9BD2CB"/>
+      <circle cx="78" cy="122" r="17" fill="#6FB4AB"/>
+      <circle cx="62" cy="92" r="15" fill="#9BD2CB"/>
+      <g>
+      <ellipse cx="162" cy="196" rx="9" ry="3.4" fill="#DCEFEA" stroke="#B9D3D9" strokeWidth="1.4"/>
+      <ellipse cx="162" cy="204" rx="11" ry="3.8" fill="#DCEFEA" stroke="#B9D3D9" strokeWidth="1.4"/>
+      </g>
+      <path d="M104 186 V96 h116 v90 z" fill="url(#ArteCasaSVG-parede)" stroke="#0B3B41" strokeWidth="3" strokeLinejoin="round"/>
+      <path d="M206 100 v82 h10 v-82z" fill="#DCEEF3"/>
+      <path d="M90 100 L162 44 L234 100 z" fill="url(#ArteCasaSVG-telha)" stroke="#0B3B41" strokeWidth="3" strokeLinejoin="round"/>
+      <g stroke="#B85C33" strokeWidth="1.6" opacity=".55" strokeLinecap="round">
+      <path d="M118 88 h88"/><path d="M130 78 h64"/><path d="M142 68 h40"/><path d="M152 58 h20"/>
+      </g>
+      <path d="M86 100 h152" stroke="#0B3B41" strokeWidth="3" strokeLinecap="round"/>
+      <g className="natal"><path d="M88 99 q76 11 150 0" stroke="#4E7A2E" strokeWidth="2" fill="none"/><circle cx="92" cy="99" r="3.4" fill="#E8635F" stroke="#0B3B41" strokeWidth="1.2" className="luz luz0"/><circle cx="107" cy="102" r="3.4" fill="#FFD98A" stroke="#0B3B41" strokeWidth="1.2" className="luz luz1"/><circle cx="121" cy="99" r="3.4" fill="#83C5BE" stroke="#0B3B41" strokeWidth="1.2" className="luz luz2"/><circle cx="136" cy="102" r="3.4" fill="#F6C177" stroke="#0B3B41" strokeWidth="1.2" className="luz luz3"/><circle cx="150" cy="99" r="3.4" fill="#E8635F" stroke="#0B3B41" strokeWidth="1.2" className="luz luz0"/><circle cx="165" cy="102" r="3.4" fill="#FFD98A" stroke="#0B3B41" strokeWidth="1.2" className="luz luz1"/><circle cx="180" cy="99" r="3.4" fill="#83C5BE" stroke="#0B3B41" strokeWidth="1.2" className="luz luz2"/><circle cx="194" cy="102" r="3.4" fill="#F6C177" stroke="#0B3B41" strokeWidth="1.2" className="luz luz3"/><circle cx="209" cy="99" r="3.4" fill="#E8635F" stroke="#0B3B41" strokeWidth="1.2" className="luz luz0"/><circle cx="223" cy="102" r="3.4" fill="#FFD98A" stroke="#0B3B41" strokeWidth="1.2" className="luz luz1"/><circle cx="238" cy="99" r="3.4" fill="#83C5BE" stroke="#0B3B41" strokeWidth="1.2" className="luz luz2"/></g>
+      <path d="M192 62 v-22 h16 v34" fill="#006D77" stroke="#0B3B41" strokeWidth="3" strokeLinejoin="round"/>
+      <rect x="189" y="36" width="22" height="6" rx="2" fill="#0B3B41"/>
+      <g fill="none" stroke="#B9D3D9" strokeWidth="3" strokeLinecap="round" className="fumaca">
+      <path d="M200 30 q-6 -6 0 -12 q6 -6 0 -12"/>
+      </g>
+      <path d="M148 186 v-48 a14 14 0 0 1 28 0 v48 z" fill="#006D77" stroke="#0B3B41" strokeWidth="3" strokeLinejoin="round"/>
+      <path d="M162 138 v48" stroke="#0B3B41" strokeWidth="1.6" opacity=".5"/>
+      <circle cx="170" cy="164" r="3" fill="#FFDDD2"/>
+      <rect x="140" y="184" width="44" height="6" rx="2" fill="#B9D3D9" stroke="#0B3B41" strokeWidth="2"/>
+      <g stroke="#0B3B41" strokeWidth="3">
+      <rect x="114" y="112" width="26" height="28" rx="4" fill="#83C5BE"/>
+      <rect x="184" y="112" width="26" height="28" rx="4" fill="#83C5BE"/>
+      </g>
+      <g stroke="#0B3B41" strokeWidth="2">
+      <path d="M127 112 v28 M114 126 h26"/>
+      <path d="M197 112 v28 M184 126 h26"/>
+      </g>
+      <g className="ceu-noite">
+      <path d="M150 186 h24 l16 20 h-56z" fill="#FFD98A" opacity=".35"/>
+      <rect x="114" y="112" width="26" height="28" rx="4" fill="#FFD98A"/>
+      <rect x="184" y="112" width="26" height="28" rx="4" fill="#FFD98A"/>
+      </g>
+      <g fill="#FFFFFF" opacity=".55">
+      <rect x="116" y="114" width="9" height="10" rx="2"/>
+      <rect x="186" y="114" width="9" height="10" rx="2"/>
+      </g>
+      <g>
+      <rect x="112" y="140" width="30" height="8" rx="2" fill="#B85C33" stroke="#0B3B41" strokeWidth="2"/>
+      <circle cx="118" cy="138" r="3.6" fill="#E29578"/><circle cx="127" cy="137" r="3.6" fill="#FFDDD2"/><circle cx="136" cy="138" r="3.6" fill="#E29578"/>
+      </g>
+      <circle cx="300" cy="172" r="15" fill="#83C5BE"/>
+      <circle cx="288" cy="178" r="11" fill="#9BD2CB"/>
+      <circle cx="311" cy="178" r="11" fill="#6FB4AB"/>
+      <g transform="translate(272,186) scale(0.78) translate(-272,-186)">
+      <g className="brinquedos">
+      <g className="bola">
+      <circle cx="252" cy="196" r="11" fill="#F0B775" stroke="#0B3B41" strokeWidth="2.4"/>
+      <path d="M241 196 q11 -7 22 0 M241 196 q11 7 22 0 M252 185 v22" stroke="#0B3B41" strokeWidth="1.8" fill="none"/>
+      </g>
+      </g>
+      <g stroke="#0B3B41" strokeWidth="2.8" strokeLinejoin="round" strokeLinecap="round">
+      <path d="M243 170 q-14 -6 -14 -20 q0 -13 11 -15 q-6 9 -1 16 q4 6 11 7 z" fill="#E8C79C"/>
+      <path d="M250 186 q-9 -4 -11 -18 q-2 -17 9 -25 q10 -7 23 -7 q14 0 23 8 q10 9 8 24 q-2 14 -10 18 z" fill="#E8C79C"/>
+      <path d="M236 172 q6 4 12 3 M236 180 q7 3 13 2 M294 172 q-6 4 -12 3 M294 180 q-7 3 -13 2" fill="none" stroke="#C9A271" strokeWidth="2"/>
+      <path d="M252 186 v-9 M264 186 v-9 M278 186 v-9 M290 186 v-9" stroke="#C9A271" strokeWidth="2.2"/>
+      <path d="M262 186 q-4 -16 4 -24 q6 -6 12 0 q8 8 4 24 z" fill="#FFF4E4"/>
+      <circle cx="272" cy="133" r="19" fill="#F0D4AE"/>
+      <path d="M259 122 l-4 -13 13 6 z" fill="#E8C79C"/>
+      <path d="M285 122 l4 -13 -13 6 z" fill="#E8C79C"/>
+      </g>
+      <path d="M261 121 l-2 -7 6 3 z" fill="#D9A9A0"/>
+      <ellipse cx="272" cy="142" rx="9" ry="7" fill="#FFF4E4" stroke="#0B3B41" strokeWidth="2.4"/>
+      <ellipse cx="272" cy="139" rx="3.4" ry="2.8" fill="#0B3B41"/>
+      <path d="M272 142 v3 M268 147 q4 3 8 0" fill="none" stroke="#0B3B41" strokeWidth="2" strokeLinecap="round"/>
+      <circle cx="263" cy="130" r="2.8" fill="#0B3B41"/>
+      <circle cx="281" cy="130" r="2.8" fill="#0B3B41"/>
+      <circle cx="264" cy="129" r="1" fill="#fff"/>
+      <circle cx="282" cy="129" r="1" fill="#fff"/>
+      <path d="M256 152 q16 9 32 0" fill="none" stroke="#006D77" strokeWidth="4.5" strokeLinecap="round"/>
+      <circle cx="272" cy="159" r="3.4" fill="#E29578" stroke="#0B3B41" strokeWidth="1.6"/>
+      </g>
+      <g stroke="#0B3B41" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round">
+      <path d="M42 186 q0 -36 21 -36 h15 q19 0 19 36 z" fill="#FFFFFF"/>
+      <path d="M92 186 q20 -4 15 -26" fill="none"/>
+      <path d="M52 186 v-9 M66 186 v-9 M80 186 v-9" stroke="#C9DDE2" strokeWidth="2.4"/>
+      <circle cx="66" cy="140" r="17" fill="#FFFFFF"/>
+      <path d="M53 130 l-3 -16 14 8 z" fill="#FFFFFF"/>
+      <path d="M79 130 l3 -16 -14 8 z" fill="#FFFFFF"/>
+      </g>
+      <path d="M55 128 l-1 -9 8 5 z" fill="#F6C3D2" stroke="none"/>
+      <path d="M77 128 l1 -9 -8 5 z" fill="#F6C3D2" stroke="none"/>
+      <g stroke="#0B3B41" strokeWidth="2.4" strokeLinejoin="round">
+      <path d="M74 118 q-9 -9 -2 -13 q7 -4 8 6 z" fill="#F19DBB"/>
+      <path d="M80 111 q10 -6 12 1 q2 8 -10 7 z" fill="#F19DBB"/>
+      <circle cx="79" cy="116" r="3.4" fill="#E07AA0"/>
+      </g>
+      <ellipse cx="60" cy="139" rx="3" ry="3.6" fill="#FFFFFF" stroke="#0B3B41" strokeWidth="1.6"/>
+      <ellipse cx="72" cy="139" rx="3" ry="3.6" fill="#FFFFFF" stroke="#0B3B41" strokeWidth="1.6"/>
+      <circle cx="60" cy="139.5" r="1.6" fill="#0B3B41"/>
+      <circle cx="72" cy="139.5" r="1.6" fill="#0B3B41"/>
+      <path d="M64.5 146 h3 l-1.5 1.8 z" fill="#F19DBB" stroke="#0B3B41" strokeWidth="1.2" strokeLinejoin="round"/>
+      <path d="M66 148 q-3 3 -5 1 M66 148 q3 3 5 1" fill="none" stroke="#0B3B41" strokeWidth="1.6" strokeLinecap="round"/>
+      <g stroke="#A9C6CE" strokeWidth="1.6" strokeLinecap="round">
+      <path d="M46 143 h9 M46 148 h9 M77 143 h9 M77 148 h9"/>
+      </g>
+      <g>
+      <path d="M12 186 v-15 M28 186 v-15" stroke="#8A6A4A" strokeWidth="3.4" strokeLinecap="round"/>
+      <rect x="-5.0" y="152" width="50" height="22" rx="6" fill="#FFF4E4" stroke="#0B3B41" strokeWidth="2.6"/>
+      <text x="20" y="167" textAnchor="middle"
+      fontFamily="-apple-system, Segoe UI, Avenir Next, Helvetica, Arial, sans-serif"
+      fontSize="13" fontWeight="700" letterSpacing="-0.2" fill="#0B3B41">Marie</text>
+      </g>
+      <g>
+      <path d="M318 186 v-15 M334 186 v-15" stroke="#8A6A4A" strokeWidth="3.4" strokeLinecap="round"/>
+      <rect x="305.0" y="152" width="42" height="22" rx="6" fill="#FFF4E4" stroke="#0B3B41" strokeWidth="2.6"/>
+      <text x="326" y="167" textAnchor="middle"
+      fontFamily="-apple-system, Segoe UI, Avenir Next, Helvetica, Arial, sans-serif"
+      fontSize="13" fontWeight="700" letterSpacing="-0.2" fill="#0B3B41">Mia</text>
+      </g>
+      </g>
+      <g>
+      <ellipse cx="52" cy="171.0" rx="44" ry="12" fill="#A97C50" stroke="#0B3B41" strokeWidth="2.5"/>
+      <ellipse cx="52" cy="170.0" rx="38" ry="8.5" fill="#8A6A4A"/>
+      <g stroke="#4E7A2E" strokeWidth="1.9" strokeLinecap="round" fill="none">
+      <path d="M15 173.0 q-5 -8 2 -12"/><path d="M89 173.0 q5 -8 -2 -12"/>
+      </g>
+      <path d="M78 163.0 q2 -16.0 0 -32" stroke="#4E7A2E" strokeWidth="2.8" fill="none" strokeLinecap="round"/>
+      <path d="M78 150.2 q-11 -5 -13 -15 q11 0 13 12z" fill="#6FA33E" stroke="#0B3B41" strokeWidth="1.7" strokeLinejoin="round"/>
+      <path d="M78 143.16 q11 -5 13 -15 q-11 0 -13 12z" fill="#5E8B3A" stroke="#0B3B41" strokeWidth="1.7" strokeLinejoin="round"/>
+      <path d="M78 138.0 C67.5 130.0 69 120.0 78 125.2 C87 120.0 88.5 130.0 78 138.0 Z"
+      fill="#E8635F" stroke="#0B3B41" strokeWidth="2.1" strokeLinejoin="round"/>
+      <path d="M73.4 127.8 q2.6 -2.6 5.2 -0.6" stroke="#8E1F1F" strokeWidth="1.9" fill="none" strokeLinecap="round" opacity=".7"/>
+      <path d="M66 160.0 q2 -23.0 0 -46" stroke="#4E7A2E" strokeWidth="2.8" fill="none" strokeLinecap="round"/>
+      <path d="M66 141.6 q-11 -5 -13 -15 q11 0 13 12z" fill="#6FA33E" stroke="#0B3B41" strokeWidth="1.7" strokeLinejoin="round"/>
+      <path d="M66 131.48 q11 -5 13 -15 q-11 0 -13 12z" fill="#5E8B3A" stroke="#0B3B41" strokeWidth="1.7" strokeLinejoin="round"/>
+      <path d="M66 121.0 C55.5 113.0 57 103.0 66 108.2 C75 103.0 76.5 113.0 66 121.0 Z"
+      fill="#D93B3B" stroke="#0B3B41" strokeWidth="2.1" strokeLinejoin="round"/>
+      <path d="M61.4 110.8 q2.6 -2.6 5.2 -0.6" stroke="#8E1F1F" strokeWidth="1.9" fill="none" strokeLinecap="round" opacity=".7"/>
+      <path d="M54 162.0 q0 -19.0 0 -38" stroke="#4E7A2E" strokeWidth="2.8" fill="none" strokeLinecap="round"/>
+      <path d="M54 146.8 q-11 -5 -13 -15 q11 0 13 12z" fill="#6FA33E" stroke="#0B3B41" strokeWidth="1.7" strokeLinejoin="round"/>
+      <path d="M54 138.44 q11 -5 13 -15 q-11 0 -13 12z" fill="#5E8B3A" stroke="#0B3B41" strokeWidth="1.7" strokeLinejoin="round"/>
+      <path d="M54 131.0 C43.5 123.0 45 113.0 54 118.2 C63 113.0 64.5 123.0 54 131.0 Z"
+      fill="#D93B3B" stroke="#0B3B41" strokeWidth="2.1" strokeLinejoin="round"/>
+      <path d="M49.4 120.8 q2.6 -2.6 5.2 -0.6" stroke="#8E1F1F" strokeWidth="1.9" fill="none" strokeLinecap="round" opacity=".7"/>
+      <path d="M42 159.0 q-2 -25.0 0 -50" stroke="#4E7A2E" strokeWidth="2.8" fill="none" strokeLinecap="round"/>
+      <path d="M42 139.0 q-11 -5 -13 -15 q11 0 13 12z" fill="#6FA33E" stroke="#0B3B41" strokeWidth="1.7" strokeLinejoin="round"/>
+      <path d="M42 128.0 q11 -5 13 -15 q-11 0 -13 12z" fill="#5E8B3A" stroke="#0B3B41" strokeWidth="1.7" strokeLinejoin="round"/>
+      <path d="M42 116.0 C31.5 108.0 33 98.0 42 103.2 C51 98.0 52.5 108.0 42 116.0 Z"
+      fill="#E8635F" stroke="#0B3B41" strokeWidth="2.1" strokeLinejoin="round"/>
+      <path d="M37.4 105.8 q2.6 -2.6 5.2 -0.6" stroke="#8E1F1F" strokeWidth="1.9" fill="none" strokeLinecap="round" opacity=".7"/>
+      <path d="M30 162.0 q-2 -20.0 0 -40" stroke="#4E7A2E" strokeWidth="2.8" fill="none" strokeLinecap="round"/>
+      <path d="M30 146.0 q-11 -5 -13 -15 q11 0 13 12z" fill="#6FA33E" stroke="#0B3B41" strokeWidth="1.7" strokeLinejoin="round"/>
+      <path d="M30 137.2 q11 -5 13 -15 q-11 0 -13 12z" fill="#5E8B3A" stroke="#0B3B41" strokeWidth="1.7" strokeLinejoin="round"/>
+      <path d="M30 129.0 C19.5 121.0 21 111.0 30 116.2 C39 111.0 40.5 121.0 30 129.0 Z"
+      fill="#D93B3B" stroke="#0B3B41" strokeWidth="2.1" strokeLinejoin="round"/>
+      <path d="M25.4 118.8 q2.6 -2.6 5.2 -0.6" stroke="#8E1F1F" strokeWidth="1.9" fill="none" strokeLinecap="round" opacity=".7"/>
+      <path d="M20 164.0 q-2 -15.0 0 -30" stroke="#4E7A2E" strokeWidth="2.8" fill="none" strokeLinecap="round"/>
+      <path d="M20 152.0 q-11 -5 -13 -15 q11 0 13 12z" fill="#6FA33E" stroke="#0B3B41" strokeWidth="1.7" strokeLinejoin="round"/>
+      <path d="M20 145.4 q11 -5 13 -15 q-11 0 -13 12z" fill="#5E8B3A" stroke="#0B3B41" strokeWidth="1.7" strokeLinejoin="round"/>
+      <path d="M20 141.0 C9.5 133.0 11 123.0 20 128.2 C29 123.0 30.5 133.0 20 141.0 Z"
+      fill="#E8635F" stroke="#0B3B41" strokeWidth="2.1" strokeLinejoin="round"/>
+      <path d="M15.4 130.8 q2.6 -2.6 5.2 -0.6" stroke="#8E1F1F" strokeWidth="1.9" fill="none" strokeLinecap="round" opacity=".7"/>
+      </g>
+      <g>
+      <ellipse cx="448" cy="171.0" rx="44" ry="12" fill="#A97C50" stroke="#0B3B41" strokeWidth="2.5"/>
+      <ellipse cx="448" cy="170.0" rx="38" ry="8.5" fill="#8A6A4A"/>
+      <g stroke="#4E7A2E" strokeWidth="1.9" strokeLinecap="round" fill="none">
+      <path d="M411 173.0 q-5 -8 2 -12"/><path d="M485 173.0 q5 -8 -2 -12"/>
+      </g>
+      <path d="M422 163.0 q-2 -16.0 0 -32" stroke="#4E7A2E" strokeWidth="2.8" fill="none" strokeLinecap="round"/>
+      <path d="M422 150.2 q-11 -5 -13 -15 q11 0 13 12z" fill="#6FA33E" stroke="#0B3B41" strokeWidth="1.7" strokeLinejoin="round"/>
+      <path d="M422 143.16 q11 -5 13 -15 q-11 0 -13 12z" fill="#5E8B3A" stroke="#0B3B41" strokeWidth="1.7" strokeLinejoin="round"/>
+      <path d="M422 138.0 C411.5 130.0 413 120.0 422 125.2 C431 120.0 432.5 130.0 422 138.0 Z"
+      fill="#E8635F" stroke="#0B3B41" strokeWidth="2.1" strokeLinejoin="round"/>
+      <path d="M417.4 127.8 q2.6 -2.6 5.2 -0.6" stroke="#8E1F1F" strokeWidth="1.9" fill="none" strokeLinecap="round" opacity=".7"/>
+      <path d="M434 160.0 q-2 -23.0 0 -46" stroke="#4E7A2E" strokeWidth="2.8" fill="none" strokeLinecap="round"/>
+      <path d="M434 141.6 q-11 -5 -13 -15 q11 0 13 12z" fill="#6FA33E" stroke="#0B3B41" strokeWidth="1.7" strokeLinejoin="round"/>
+      <path d="M434 131.48 q11 -5 13 -15 q-11 0 -13 12z" fill="#5E8B3A" stroke="#0B3B41" strokeWidth="1.7" strokeLinejoin="round"/>
+      <path d="M434 121.0 C423.5 113.0 425 103.0 434 108.2 C443 103.0 444.5 113.0 434 121.0 Z"
+      fill="#D93B3B" stroke="#0B3B41" strokeWidth="2.1" strokeLinejoin="round"/>
+      <path d="M429.4 110.8 q2.6 -2.6 5.2 -0.6" stroke="#8E1F1F" strokeWidth="1.9" fill="none" strokeLinecap="round" opacity=".7"/>
+      <path d="M446 162.0 q0 -19.0 0 -38" stroke="#4E7A2E" strokeWidth="2.8" fill="none" strokeLinecap="round"/>
+      <path d="M446 146.8 q-11 -5 -13 -15 q11 0 13 12z" fill="#6FA33E" stroke="#0B3B41" strokeWidth="1.7" strokeLinejoin="round"/>
+      <path d="M446 138.44 q11 -5 13 -15 q-11 0 -13 12z" fill="#5E8B3A" stroke="#0B3B41" strokeWidth="1.7" strokeLinejoin="round"/>
+      <path d="M446 131.0 C435.5 123.0 437 113.0 446 118.2 C455 113.0 456.5 123.0 446 131.0 Z"
+      fill="#D93B3B" stroke="#0B3B41" strokeWidth="2.1" strokeLinejoin="round"/>
+      <path d="M441.4 120.8 q2.6 -2.6 5.2 -0.6" stroke="#8E1F1F" strokeWidth="1.9" fill="none" strokeLinecap="round" opacity=".7"/>
+      <path d="M458 159.0 q2 -25.0 0 -50" stroke="#4E7A2E" strokeWidth="2.8" fill="none" strokeLinecap="round"/>
+      <path d="M458 139.0 q-11 -5 -13 -15 q11 0 13 12z" fill="#6FA33E" stroke="#0B3B41" strokeWidth="1.7" strokeLinejoin="round"/>
+      <path d="M458 128.0 q11 -5 13 -15 q-11 0 -13 12z" fill="#5E8B3A" stroke="#0B3B41" strokeWidth="1.7" strokeLinejoin="round"/>
+      <path d="M458 116.0 C447.5 108.0 449 98.0 458 103.2 C467 98.0 468.5 108.0 458 116.0 Z"
+      fill="#E8635F" stroke="#0B3B41" strokeWidth="2.1" strokeLinejoin="round"/>
+      <path d="M453.4 105.8 q2.6 -2.6 5.2 -0.6" stroke="#8E1F1F" strokeWidth="1.9" fill="none" strokeLinecap="round" opacity=".7"/>
+      <path d="M470 162.0 q2 -20.0 0 -40" stroke="#4E7A2E" strokeWidth="2.8" fill="none" strokeLinecap="round"/>
+      <path d="M470 146.0 q-11 -5 -13 -15 q11 0 13 12z" fill="#6FA33E" stroke="#0B3B41" strokeWidth="1.7" strokeLinejoin="round"/>
+      <path d="M470 137.2 q11 -5 13 -15 q-11 0 -13 12z" fill="#5E8B3A" stroke="#0B3B41" strokeWidth="1.7" strokeLinejoin="round"/>
+      <path d="M470 129.0 C459.5 121.0 461 111.0 470 116.2 C479 111.0 480.5 121.0 470 129.0 Z"
+      fill="#D93B3B" stroke="#0B3B41" strokeWidth="2.1" strokeLinejoin="round"/>
+      <path d="M465.4 118.8 q2.6 -2.6 5.2 -0.6" stroke="#8E1F1F" strokeWidth="1.9" fill="none" strokeLinecap="round" opacity=".7"/>
+      <path d="M480 164.0 q2 -15.0 0 -30" stroke="#4E7A2E" strokeWidth="2.8" fill="none" strokeLinecap="round"/>
+      <path d="M480 152.0 q-11 -5 -13 -15 q11 0 13 12z" fill="#6FA33E" stroke="#0B3B41" strokeWidth="1.7" strokeLinejoin="round"/>
+      <path d="M480 145.4 q11 -5 13 -15 q-11 0 -13 12z" fill="#5E8B3A" stroke="#0B3B41" strokeWidth="1.7" strokeLinejoin="round"/>
+      <path d="M480 141.0 C469.5 133.0 471 123.0 480 128.2 C489 123.0 490.5 133.0 480 141.0 Z"
+      fill="#E8635F" stroke="#0B3B41" strokeWidth="2.1" strokeLinejoin="round"/>
+      <path d="M475.4 130.8 q2.6 -2.6 5.2 -0.6" stroke="#8E1F1F" strokeWidth="1.9" fill="none" strokeLinecap="round" opacity=".7"/>
+      </g>
+      <g className="borboleta" transform="translate(96,128) scale(.9)">
+      <g className="borboleta-corpo">
+      <ellipse cx="0" cy="0" rx="1.6" ry="5" fill="#0B3B41"/>
+      <path className="asa-b asa-be" d="M-1 -2 q-11 -9 -13 1 q-2 9 12 4z" fill="#F09CA8" stroke="#0B3B41" strokeWidth="1.3"/>
+      <path className="asa-b asa-bd" d="M1 -2 q11 -9 13 1 q2 9 -12 4z" fill="#F09CA8" stroke="#0B3B41" strokeWidth="1.3"/>
+      <path d="M-1 -5 q-3 -5 -6 -6 M1 -5 q3 -5 6 -6" stroke="#0B3B41" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
+      </g>
+      </g>
+      </svg>
+  );
+}
+
+/* A cena muda com a hora do dia e ganha luzinhas em dezembro. */
+function ArteCasa({ w = 260 }) {
+  const agora = new Date();
+  const h = agora.getHours();
+  const noite = h >= 18 || h < 6;
+  const dezembro = agora.getMonth() === 11;
+  return (
+    <div className={`cena ${noite ? "cena-noite" : "cena-dia"}${dezembro ? " cena-natal" : ""}`}>
+      <ArteCasaSVG w={w} />
+    </div>
+  );
+}
+function ArtePote({ w = 260 }) {
+  return (
+      <svg width={w} height={w * 0.7500} role="img" aria-label="Pote de moedas" viewBox="0 0 240 180">
+      <defs>
+      <linearGradient id="ArtePote-vidro" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stopColor="#FFFFFF"/><stop offset=".5" stopColor="#EDF6F9"/><stop offset="1" stopColor="#DCEEF3"/>
+      </linearGradient>
+      <linearGradient id="ArtePote-moeda" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stopColor="#EBA283"/><stop offset="1" stopColor="#D9825F"/>
+      </linearGradient>
+      </defs>
+      <circle cx="120" cy="92" r="82" fill="#EDF6F9"/>
+      <ellipse cx="120" cy="164" rx="80" ry="7" fill="#DCEEF3"/>
+      <path d="M74 66 v76 a12 12 0 0 0 12 12 h56 a12 12 0 0 0 12 -12 v-76 z" fill="url(#ArtePote-vidro)" stroke="#0B3B41" strokeWidth="3" strokeLinejoin="round"/>
+      <rect x="64" y="48" width="100" height="20" rx="8" fill="#83C5BE" stroke="#0B3B41" strokeWidth="3"/>
+      <rect x="94" y="86" width="40" height="22" rx="4" fill="#FFDDD2" stroke="#0B3B41" strokeWidth="2.4"/>
+      <path d="M102 97 h24" stroke="#C25A35" strokeWidth="2.4" strokeLinecap="round"/>
+      <path d="M106 102 h16" stroke="#C25A35" strokeWidth="2.4" strokeLinecap="round" opacity=".6"/>
+      <path d="M82 76 v56" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" opacity=".9"/>
+      <g stroke="#0B3B41" strokeWidth="2.4">
+      <ellipse cx="100" cy="146" rx="15" ry="5.5" fill="url(#ArtePote-moeda)"/>
+      <ellipse cx="128" cy="146" rx="15" ry="5.5" fill="url(#ArtePote-moeda)"/>
+      <ellipse cx="114" cy="138" rx="15" ry="5.5" fill="url(#ArtePote-moeda)"/>
+      </g>
+      <g stroke="#0B3B41" strokeWidth="2.6">
+      <ellipse cx="190" cy="160" rx="17" ry="6" fill="url(#ArtePote-moeda)"/>
+      <path d="M173 152 v8 a17 6 0 0 0 34 0 v-8" fill="#D9825F"/>
+      <ellipse cx="190" cy="152" rx="17" ry="6" fill="url(#ArtePote-moeda)"/>
+      <path d="M173 144 v8 a17 6 0 0 0 34 0 v-8" fill="#D9825F"/>
+      <ellipse cx="190" cy="144" rx="17" ry="6" fill="url(#ArtePote-moeda)"/>
+      </g>
+      <g stroke="#0B3B41" strokeWidth="2.6">
+      <circle cx="44" cy="146" r="16" fill="url(#ArtePote-moeda)"/>
+      <circle cx="44" cy="146" r="10" fill="none" stroke="#FFDDD2" strokeWidth="2.4"/>
+      <path d="M44 139 v14 M40 142 h6 M40 150 h6" stroke="#0B3B41" strokeWidth="2.4" strokeLinecap="round"/>
+      </g>
+      <g stroke="#83C5BE" strokeWidth="3.4" strokeLinecap="round">
+      <path d="M186 44 v14 M176 51 h20"/>
+      <path d="M40 60 v9 M35.5 64.5 h9"/>
+      </g>
+      </svg>
+  );
+}
+function ArteRecibo({ w = 260 }) {
+  return (
+      <svg width={w} height={w * 0.7500} role="img" aria-label="Recibo e lápis" viewBox="0 0 240 180">
+      <circle cx="120" cy="92" r="80" fill="#EDF6F9"/>
+      <ellipse cx="120" cy="164" rx="76" ry="7" fill="#DCEEF3"/>
+      <g transform="rotate(-6 120 100)">
+      <path d="M70 36 h100 v112 l-10 -8 -10 8 -10 -8 -10 8 -10 -8 -10 8 -10 -8 -10 8 -10 -8 -10 8 z"
+      fill="#FFFFFF" stroke="#0B3B41" strokeWidth="3" strokeLinejoin="round"/>
+      <path d="M84 56 h36" stroke="#0B3B41" strokeWidth="3.4" strokeLinecap="round"/>
+      <g stroke="#B9D3D9" strokeWidth="3" strokeLinecap="round">
+      <path d="M84 74 h48 M84 88 h40 M84 102 h52 M84 116 h30"/>
+      </g>
+      <g stroke="#83C5BE" strokeWidth="3" strokeLinecap="round">
+      <path d="M144 74 h12 M144 88 h12 M144 102 h12"/>
+      </g>
+      <rect x="80" y="126" width="80" height="2" fill="#0B3B41" opacity=".2"/>
+      </g>
+      <g transform="rotate(38 172 120)">
+      <rect x="162" y="62" width="20" height="90" rx="3" fill="#E29578" stroke="#0B3B41" strokeWidth="3"/>
+      <rect x="162" y="62" width="20" height="14" rx="3" fill="#FFDDD2" stroke="#0B3B41" strokeWidth="3"/>
+      <rect x="162" y="76" width="20" height="8" fill="#006D77"/>
+      <path d="M162 152 l10 18 l10 -18 z" fill="#FFDDD2" stroke="#0B3B41" strokeWidth="3" strokeLinejoin="round"/>
+      <path d="M168 162 l4 8 l4 -8 z" fill="#0B3B41"/>
+      </g>
+      <g stroke="#83C5BE" strokeWidth="3.4" strokeLinecap="round">
+      <path d="M54 52 v12 M48 58 h12"/>
+      </g>
+      </svg>
+  );
+}
+function ArteCartao() {
+  return (
+      <svg width="100%" role="img" aria-label="Cartão da casa" viewBox="0 0 340 250">
+      <defs>
+      <linearGradient id="ArteCartaoSVG-corpo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stopColor="#0E6F78"/><stop offset=".55" stopColor="#00606B"/><stop offset="1" stopColor="#08454E"/>
+      </linearGradient>
+      <linearGradient id="ArteCartaoSVG-brilho" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stopColor="#FFFFFF" stopOpacity=".22"/><stop offset=".5" stopColor="#FFFFFF" stopOpacity="0"/>
+      </linearGradient>
+      <linearGradient id="ArteCartaoSVG-chip" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stopColor="#FFE7A8"/><stop offset=".5" stopColor="#E8C27A"/><stop offset="1" stopColor="#C9A15A"/>
+      </linearGradient>
+      <clipPath id="ArteCartaoSVG-rec"><rect x="6" y="6" width="328" height="238" rx="24"/></clipPath>
+      </defs>
+      <rect x="10" y="14" width="320" height="230" rx="24" fill="#06343B" opacity=".22"/>
+      <rect x="6" y="6" width="328" height="238" rx="24" fill="url(#ArteCartaoSVG-corpo)"/>
+      <g clipPath="url(#ArteCartaoSVG-rec)">
+      <circle cx="292" cy="24" r="74" fill="#83C5BE" opacity=".16"/>
+      <circle cx="332" cy="206" r="62" fill="#E29578" opacity=".18"/>
+      <path d="M6 152 q90 -34 170 -6 q70 24 158 -10 v108 H6 z" fill="#FFFFFF" opacity=".06"/>
+      <rect x="6" y="6" width="328" height="238" fill="url(#ArteCartaoSVG-brilho)"/>
+      </g>
+      <rect x="6" y="6" width="328" height="238" rx="24" fill="none" stroke="#0B3B41" strokeWidth="3"/>
+      <g>
+      <rect x="28" y="52" width="46" height="35" rx="7" fill="url(#ArteCartaoSVG-chip)" stroke="#8A6A2E" strokeWidth="1.6"/>
+      <path d="M28 63 h13 M28 76 h13 M61 63 h13 M61 76 h13 M41 52 v9 a6 6 0 0 0 6 6 h6 a6 6 0 0 1 6 6 v14
+      M41 87 v-9 a6 6 0 0 1 6 -6 h6 a6 6 0 0 0 6 -6 v-14" stroke="#8A6A2E" strokeWidth="1.5" fill="none"/>
+      </g>
+      <g fill="none" stroke="#FFFFFF" strokeWidth="3" strokeLinecap="round" opacity=".85">
+      <path d="M88 58 a14 14 0 0 1 0 24"/>
+      <path d="M97 51 a24 24 0 0 1 0 38"/>
+      <path d="M106 44 a34 34 0 0 1 0 52"/>
+      </g>
+      <g fill="#EDF6F9" fontFamily="-apple-system, Segoe UI, Avenir Next, Helvetica, Arial, sans-serif">
+      <g fontSize="19" fontWeight="700" letterSpacing="2.5">
+      <text x="28" y="126">••••</text><text x="88" y="126">••••</text>
+      <text x="148" y="126">••••</text><text x="208" y="126">2026</text>
+      </g>
+      <text x="28" y="152" fontSize="9.5" fontWeight="600" opacity=".65" letterSpacing="1.4">NOSSA CASITA</text>
+      <text x="28" y="172" fontSize="14" fontWeight="750" letterSpacing=".3">XAN &amp; ISA</text>
+      </g>
+      <g transform="translate(258,168)">
+      <circle cx="14" cy="14" r="16" fill="#E29578" opacity=".95"/>
+      <circle cx="34" cy="14" r="16" fill="#FFDDD2" opacity=".85"/>
+      </g>
+      </svg>
+  );
+}
+
+/* ================================================================== */
+/* Estilos (tokens: espaço 4/8/12/16/20/24/32, raio 10/14/999)          */
+/* ================================================================== */
+
+const CSS = `
+.cc, .cc * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+.cc-fundo { background: ${C.suave}; min-height: 100%; }
+.cc {
+  font-family: -apple-system, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI",
+               "Avenir Next", Inter, system-ui, "Helvetica Neue", Arial, sans-serif;
+  color: ${C.tinta}; background: ${C.papel};
+  width: 100%; max-width: 460px; margin: 0 auto; min-height: 100%;
+  position: relative;
+  padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+@media (min-width: 620px) {
+  .cc-fundo { padding: 28px 0; }
+  .cc { border-radius: 22px; box-shadow: 0 10px 40px rgba(11,59,65,.12); overflow: hidden; min-height: 720px; }
+}
+.cc button { font-family: inherit; cursor: pointer; border: 0; background: none; color: inherit; padding: 0; }
+.cc input { font-family: inherit; }
+.cc button:focus-visible, .cc input:focus-visible { outline: 3px solid ${C.acento}; outline-offset: 2px; border-radius: 8px; }
+.n { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+
+.t-xl   { font-size: 48px; font-weight: 800; letter-spacing: -.035em; line-height: 1.02; }
+.t-tela { font-size: 23px; font-weight: 750; letter-spacing: -.02em; }
+.t-num  { font-size: 24px; font-weight: 750; letter-spacing: -.015em; }
+.t-item { font-size: 17px; font-weight: 600; letter-spacing: -.005em; }
+.t-rot  { font-size: 14.5px; font-weight: 650; color: ${C.tinta2}; letter-spacing: .01em; }
+.t-mini { font-size: 13px; font-weight: 550; color: ${C.tinta2}; }
+
+.topo { padding: 16px 20px 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 60px; }
+.corpo { padding: 0 20px; }
+.divisor { border-bottom: 1px solid ${C.linha}; }
+.toque { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; border-radius: 12px; }
+.toque:active { background: ${C.suave}; }
+
+.nav { position: absolute; bottom: 0; left: 0; right: 0;
+  height: calc(74px + env(safe-area-inset-bottom, 0px)); padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: ${C.papel}; border-top: 1px solid ${C.linha};
+  display: grid; grid-template-columns: repeat(3,1fr); }
+.nav button { display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 11px 0 0; font-size: 12px; font-weight: 600; color: ${C.tinta2}; }
+.nav button[data-on="1"] { color: ${C.acento}; font-weight: 750; }
+
+.grade { display: grid; grid-template-columns: repeat(2, 1fr); gap: 9px; }
+.tile { position: relative; display: flex; align-items: center; justify-content: center;
+  padding: 0 6px; height: 54px; border-radius: 13px;
+  background: #C6E8D6; color: #0B3B41; font-size: 15.5px; font-weight: 700;
+  letter-spacing: -.01em; text-align: center; line-height: 1.15;
+  border: 1px solid #A6D9C1;
+  box-shadow: 0 3px 0 #8FCBB0, 0 4px 8px rgba(11,59,65,.10);
+  transition: transform .09s ease, box-shadow .09s ease, background .12s ease; }
+.tile:active { transform: translateY(3px); box-shadow: 0 0 0 #8FCBB0, 0 1px 3px rgba(11,59,65,.12); }
+.tile[data-on="1"] { background: ${C.acento}; color: #fff; border-color: #004F57;
+  box-shadow: 0 3px 0 #004147, 0 5px 12px rgba(0,109,119,.32); }
+.tile[data-on="1"]:active { transform: translateY(3px); box-shadow: 0 0 0 #004147, 0 1px 3px rgba(0,109,119,.3); }
+
+.pessoa { display: inline-flex; align-items: center; justify-content: center; height: 46px; padding: 0 16px;
+  border-radius: 999px; font-size: 16.5px; font-weight: 750; letter-spacing: -.01em;
+  transition: transform .09s ease, box-shadow .09s ease; }
+.pessoa:active { transform: translateY(2px); }
+.pessoa[data-p="0"] { background: #D3E7F7; color: #0E3A58; border: 1px solid #A7C8E3; box-shadow: 0 3px 0 #A7C8E3; }
+.pessoa[data-p="0"][data-on="1"] { background: #1D6FA5; color: #fff; border-color: #12557F; box-shadow: 0 3px 0 #12557F, 0 4px 10px rgba(29,111,165,.34); }
+.pessoa[data-p="1"] { background: #FADDE6; color: #7A2140; border: 1px solid #E8B6C6; box-shadow: 0 3px 0 #E8B6C6; }
+.pessoa[data-p="1"][data-on="1"] { background: #B33D68; color: #fff; border-color: #8C2C4F; box-shadow: 0 3px 0 #8C2C4F, 0 4px 10px rgba(179,61,104,.34); }
+
+.b-lancar { width: 100%; height: 72px; border-radius: 18px; background: ${C.acento}; color: #fff;
+  font-size: 20.5px; font-weight: 800; letter-spacing: -.02em;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  box-shadow: 0 5px 0 #004147, 0 10px 24px rgba(0,109,119,.34);
+  transition: transform .09s ease, box-shadow .09s ease, background .15s ease; }
+.b-lancar:active { transform: translateY(5px); box-shadow: 0 0 0 #004147, 0 2px 6px rgba(0,109,119,.3); }
+.b-lancar[data-off="1"] { background: #DCE9EC; color: #5A7C84; box-shadow: 0 4px 0 #C0D6DB; }
+.b-lancar[data-off="1"]:active { transform: translateY(4px); box-shadow: 0 0 0 #C0D6DB; }
+
+.tecla { height: 52px; font-size: 26px; font-weight: 650; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center; color: ${C.tinta};
+  background: ${C.suave}; border: 1px solid ${C.linha}; }
+.tecla:active { background: ${C.aqua}; color: #fff; }
+
+.chip { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 14px; height: 42px;
+  border-radius: 999px; border: 1.5px solid ${C.linha}; font-size: 14.5px; font-weight: 650;
+  white-space: nowrap; color: ${C.tinta2}; background: ${C.papel}; }
+.chip[data-on="1"] { border-color: ${C.tinta}; background: ${C.tinta}; color: #fff; }
+
+.trilho { position: relative; height: 10px; background: ${C.suave}; border-radius: 999px; overflow: hidden; border: 1px solid ${C.linha}; }
+.trilho .marca { position: absolute; top: -2px; bottom: -2px; width: 2px; background: ${C.tinta}; opacity: .55; }
+
+.campo { width: 100%; padding: 15px 16px; border: 1.5px solid ${C.linha}; border-radius: 12px;
+  font-size: 17px; background: ${C.papel}; color: ${C.tinta}; }
+.campo::placeholder { color: #7C9BA2; }
+.campo-teto { width: 112px; padding: 10px 12px; border: 1.5px solid ${C.linha}; border-radius: 10px;
+  font-size: 16px; font-weight: 650; background: ${C.papel}; color: ${C.tinta}; text-align: right; }
+
+.b-forte { width: 100%; padding: 18px; background: ${C.acento}; color: #fff;
+  border-radius: 14px; font-size: 17px; font-weight: 700; letter-spacing: -.01em; }
+.b-forte[data-off="1"] { background: #9FB9BF; }
+.b-forte:active { filter: brightness(.92); }
+.b-fraco { width: 100%; padding: 16px; border: 1.5px solid ${C.linha}; border-radius: 14px;
+  font-size: 16px; font-weight: 650; color: ${C.tinta}; }
+.b-fraco:disabled { color: #7C9BA2; }
+
+.caixa-quente { background: ${C.quente}; border-radius: 14px; padding: 14px 16px;
+  font-size: 14.5px; line-height: 1.55; color: #6B3220; font-weight: 550; }
+.caixa-suave { background: ${C.suave}; border: 1px solid ${C.linha}; border-radius: 14px; padding: 14px 16px;
+  font-size: 14.5px; line-height: 1.55; color: ${C.tinta2}; font-weight: 550; }
+
+.toast { position: absolute; left: 16px; right: 16px; bottom: calc(92px + env(safe-area-inset-bottom, 0px)); z-index: 20;
+  background: ${C.tinta}; color: #fff; border-radius: 14px; padding: 13px 16px;
+  font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 12px;
+  box-shadow: 0 8px 24px rgba(11,59,65,.28); }
+.toast[data-erro="1"] { background: ${C.gasto}; }
+.toast button { color: ${C.aqua}; font-weight: 750; padding: 6px 4px; }
+
+.notas { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 30; }
+.nota { position: absolute; bottom: 30%; animation: voar 2.9s cubic-bezier(.35,.5,.45,1) forwards; opacity: 0; }
+@keyframes voar {
+  0%   { transform: translate(0,0) rotate(0deg) scale(.4); opacity: 0; }
+  8%   { opacity: 1; }
+  35%  { transform: translate(calc(var(--dx) * .3), -110px) rotate(calc(var(--giro) * .4)) scale(1); }
+  60%  { transform: translate(calc(var(--dx) * .62), -215px) rotate(calc(var(--giro) * .75)) scale(1); opacity: 1; }
+  85%  { opacity: .85; }
+  100% { transform: translate(var(--dx), -400px) rotate(var(--giro)) scale(.92); opacity: 0; }
+}
+.asa { animation-name: bater; animation-iteration-count: infinite; animation-timing-function: ease-in-out; transform-box: fill-box; }
+.asa-e { transform-origin: 100% 50%; }
+.asa-d { transform-origin: 0% 50%; }
+@keyframes bater {
+  0%, 100% { transform: scaleY(1) rotate(0deg); }
+  50%      { transform: scaleY(.45) rotate(-6deg); }
+}
+.selo { position: absolute; left: 50%; top: 38%; transform: translate(-50%,-50%);
+  width: 84px; height: 84px; border-radius: 50%; background: ${C.acento}; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  animation: selo 1.6s ease forwards; z-index: 31; pointer-events: none; }
+@keyframes selo {
+  0%   { transform: translate(-50%,-50%) scale(.3); opacity: 0; }
+  16%  { transform: translate(-50%,-50%) scale(1.08); opacity: 1; }
+  28%  { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+  82%  { opacity: 1; }
+  100% { transform: translate(-50%,-50%) scale(1); opacity: 0; }
+}
+.cena { line-height: 0; }
+.cena-dia .ceu-noite, .cena-noite .ceu-dia { display: none; }
+.cena .natal { display: none; }
+.cena-natal .natal { display: block; }
+.cena .nuvem-a { animation: deriva 26s ease-in-out infinite; }
+.cena .nuvem-b { animation: deriva 34s ease-in-out infinite reverse; }
+@keyframes deriva { 0%,100% { transform: translateX(0); } 50% { transform: translateX(16px); } }
+.cena .astro { animation: pulsa 6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes pulsa { 0%,100% { transform: scale(1); opacity: .95; } 50% { transform: scale(1.06); opacity: 1; } }
+.cena .estrelas path { animation: cintila 3.2s ease-in-out infinite; }
+.cena .estrelas path:nth-child(2) { animation-delay: .7s; }
+.cena .estrelas path:nth-child(3) { animation-delay: 1.4s; }
+.cena .estrelas path:nth-child(4) { animation-delay: 2.1s; }
+.cena .estrelas path:nth-child(5) { animation-delay: 2.8s; }
+@keyframes cintila { 0%,100% { opacity: .45; } 50% { opacity: 1; } }
+.cena .fumaca { animation: sobe 5s ease-in-out infinite; transform-box: fill-box; transform-origin: bottom center; }
+@keyframes sobe { 0% { opacity: 0; transform: translateY(6px) scale(.9); } 35% { opacity: .9; } 100% { opacity: 0; transform: translateY(-14px) scale(1.12); } }
+.cena .bola { animation: quica 3.4s ease-in-out infinite; transform-box: fill-box; transform-origin: bottom center; }
+@keyframes quica { 0%,72%,100% { transform: translateY(0) rotate(0deg); } 82% { transform: translateY(-13px) rotate(-16deg); } 92% { transform: translateY(0) rotate(-24deg); } }
+.cena .luz { animation: piscaluz 2.4s ease-in-out infinite; }
+.cena .luz1 { animation-delay: .6s; } .cena .luz2 { animation-delay: 1.2s; } .cena .luz3 { animation-delay: 1.8s; }
+@keyframes piscaluz { 0%,100% { opacity: .45; } 50% { opacity: 1; } }
+.cena .borboleta { animation: rota 14s ease-in-out infinite; }
+@keyframes rota {
+  0%   { transform: translate(96px,128px) scale(.9); }
+  25%  { transform: translate(132px,96px) scale(.9); }
+  50%  { transform: translate(104px,64px) scale(.9); }
+  75%  { transform: translate(66px,102px) scale(.9); }
+  100% { transform: translate(96px,128px) scale(.9); }
+}
+.cena .asa-b { animation: bate .3s ease-in-out infinite; transform-box: fill-box; }
+.cena .asa-be { transform-origin: 100% 50%; }
+.cena .asa-bd { transform-origin: 0% 50%; }
+@keyframes bate { 0%,100% { transform: scaleX(1); } 50% { transform: scaleX(.35); } }
+
+.veu { position: absolute; inset: 0; background: rgba(11,59,65,.55); z-index: 40;
+  display: flex; align-items: center; justify-content: center; padding: 20px; }
+.modal { background: ${C.papel}; border-radius: 20px; padding: 22px 20px; width: 100%; max-width: 380px;
+  box-shadow: 0 20px 50px rgba(11,59,65,.4); max-height: 92%; overflow-y: auto; }
+.b-perigo { width: 100%; padding: 18px; background: ${C.gasto}; color: #fff; border-radius: 14px;
+  font-size: 17px; font-weight: 750; }
+.b-perigo[data-off="1"] { background: #E0C4B8; color: #8A6C61; }
+@media (prefers-reduced-motion: reduce) { .cc * { transition: none !important; animation: none !important; } .notas, .selo { display: none; } .cena .borboleta { transform: translate(96px,128px) scale(.9); } }
+`;
+
+/* ================================================================== */
+/* Componentes de apoio                                                */
+/* ================================================================== */
+
+function VoltarLancar({ onVoltar }) {
+  return (
+    <button onClick={onVoltar} aria-label="Voltar para a tela de lançar"
+      style={{ display: "inline-flex", alignItems: "center", gap: 6,
+      height: 40, padding: "0 15px", borderRadius: 999, background: C.acento, color: "#fff",
+      fontSize: 15, fontWeight: 750, whiteSpace: "nowrap", boxShadow: "0 3px 0 #004147" }}>
+      <ChevronLeft size={17} strokeWidth={2.8} /> Voltar
+    </button>
+  );
+}
+
+function NavMes({ ym, setYm }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+      <button className="toque" onClick={() => setYm(mesAnterior(ym))} aria-label="Mês anterior" style={{ minWidth: 38 }}>
+        <ChevronLeft size={21} />
+      </button>
+      <span className="t-item" style={{ textTransform: "capitalize", minWidth: 100, textAlign: "center", fontSize: 15.5 }}>
+        {rotuloMes(ym)}
+      </span>
+      <button className="toque" onClick={() => setYm(mesSeguinte(ym))} aria-label="Próximo mês" style={{ minWidth: 38 }}>
+        <ChevronRight size={21} />
+      </button>
+    </div>
+  );
+}
+
+function Toast({ toast, onDesfazer }) {
+  if (!toast) return null;
+  return (
+    <div className="toast" data-erro={toast.erro ? "1" : "0"} role="status">
+      <span style={{ flex: 1 }}>{toast.texto}</span>
+      {toast.desfazer && <button onClick={onDesfazer}>Desfazer</button>}
+    </div>
+  );
+}
+
+function ConfirmarZerar({ onCancelar, onConfirmar, resumo }) {
+  const [texto, setTexto] = useState("");
+  const liberado = texto.trim().toUpperCase() === "APAGAR";
+  return (
+    <div className="veu" role="dialog" aria-modal="true" aria-label="Confirmar apagar tudo">
+      <div className="modal">
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+          <span style={{ width: 46, height: 46, borderRadius: 14, background: C.quente, flexShrink: 0,
+            display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <AlertCircle size={24} color={C.gasto} strokeWidth={2.4} />
+          </span>
+          <div className="t-tela" style={{ fontSize: 20.5, color: C.gasto }}>Apagar tudo?</div>
+        </div>
+
+        <p style={{ fontSize: 15.5, lineHeight: 1.6, fontWeight: 600, marginBottom: 12 }}>
+          Isto apaga de vez, dos dois celulares, tudo o que vocês lançaram:
+        </p>
+        <div className="caixa-quente" style={{ marginBottom: 12 }}>
+          {resumo.lancamentos} lançamento(s), {resumo.recorrentes} recorrente(s) e {resumo.tetos} teto(s).
+          A senha atual também deixa de valer, e vocês vão criar uma nova do zero. O outro celular também será zerado assim que abrir o app.
+        </div>
+        <p style={{ fontSize: 15, lineHeight: 1.6, color: C.gasto, fontWeight: 700, marginBottom: 14 }}>
+          Não tem como desfazer. Se quiser guardar o histórico, cancele agora e exporte a planilha antes.
+        </p>
+
+        <label className="t-rot" style={{ display: "block", marginBottom: 7 }}>
+          Para confirmar, escreva APAGAR abaixo
+        </label>
+        <input className="campo" value={texto} autoComplete="off" aria-label="Escreva APAGAR para confirmar"
+          placeholder="APAGAR" onChange={(e) => setTexto(e.target.value)} style={{ marginBottom: 14 }} />
+
+        <button className="b-perigo" data-off={liberado ? "0" : "1"} disabled={!liberado}
+          onClick={onConfirmar} style={{ marginBottom: 9 }}>
+          <Trash2 size={17} style={{ verticalAlign: "-3px", marginRight: 8 }} />
+          Apagar tudo e recomeçar
+        </button>
+        <button className="b-fraco" onClick={onCancelar}>Cancelar, não quero apagar</button>
+      </div>
+    </div>
+  );
+}
+
+function Secao({ titulo, children }) {
+  return (
+    <div style={{ marginBottom: 32 }}>
+      <div className="t-rot" style={{ marginBottom: 10 }}>{titulo}</div>
+      {children}
+    </div>
+  );
+}
+
+function Pizza({ dados, total, tam = 188 }) {
+  const R = 82, r = 48, cx = 100, cy = 100;
+  const fatias = [];
+  let ang = -Math.PI / 2;
+  dados.forEach((d) => {
+    const frac = d.valor / total;
+    const passo = frac * Math.PI * 2;
+    const fim = ang + passo;
+    const grande = passo > Math.PI ? 1 : 0;
+    const p = (raio, a) => [cx + raio * Math.cos(a), cy + raio * Math.sin(a)];
+    if (frac > 0.9999) {
+      fatias.push({ ...d, anel: true, pct: 100 });
+    } else {
+      const [x1, y1] = p(R, ang), [x2, y2] = p(R, fim);
+      const [x3, y3] = p(r, fim), [x4, y4] = p(r, ang);
+      fatias.push({ ...d, pct: Math.round(frac * 100),
+        d: `M${x1.toFixed(2)} ${y1.toFixed(2)} A${R} ${R} 0 ${grande} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} L${x3.toFixed(2)} ${y3.toFixed(2)} A${r} ${r} 0 ${grande} 0 ${x4.toFixed(2)} ${y4.toFixed(2)} Z` });
+    }
+    ang = fim;
+  });
+  return (
+    <svg width={tam} height={tam} viewBox="0 0 200 200" role="img"
+      aria-label={`Divisão dos gastos: ${fatias.map((x) => `${x.nome} ${x.pct}%`).join(", ")}`}>
+      {fatias.map((x) => x.anel
+        ? <circle key={x.id} cx={cx} cy={cy} r={(R + r) / 2} fill="none" stroke={x.cor} strokeWidth={R - r} />
+        : <path key={x.id} d={x.d} fill={x.cor} stroke="#FFFFFF" strokeWidth="2.5" strokeLinejoin="round" />)}
+      <circle cx={cx} cy={cy} r={r - 2} fill="#FFFFFF" />
+      <text x={cx} y={cy - 6} textAnchor="middle" fontSize="13" fontWeight="650" fill={C.tinta2}>gastos</text>
+      <text x={cx} y={cy + 16} textAnchor="middle" fontSize="17" fontWeight="800" fill={C.tinta}
+        style={{ fontVariantNumeric: "tabular-nums" }}>{brlCurto(total)}</text>
+    </svg>
+  );
+}
+
+function Cartao({ rot, val, cor, fundo, extra }) {
+  return (
+    <div style={{ flex: 1, background: fundo, borderRadius: 14, padding: "12px 12px 11px", minWidth: 0 }}>
+      <div className="t-mini" style={{ color: cor, opacity: .85 }}>{rot}</div>
+      <div className="n" style={{ fontSize: tamCartao(val), fontWeight: 750, color: cor, marginTop: 2,
+        letterSpacing: "-.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{val}</div>
+      {extra}
+    </div>
+  );
+}
+
+function Moldura({ children, semNav, toast, onDesfazer, festa }) {
+  return (
+    <div className="cc-fundo"><style>{CSS}</style>
+      <div className="cc" style={semNav ? { paddingBottom: 0 } : undefined}>
+        {children}
+        {festa ? <ChuvaDeNotas chave={festa} /> : null}
+        <Toast toast={toast} onDesfazer={onDesfazer} />
+      </div>
+    </div>
+  );
+}
+
+function ChuvaDeNotas({ chave }) {
+  const notas = useMemo(() => {
+    const r = (a, b) => a + Math.random() * (b - a);
+    return Array.from({ length: 8 }, (_, i) => ({
+      id: i,
+      esq: r(10, 80),
+      dx: `${r(-70, 70).toFixed(0)}px`,
+      giro: `${r(-40, 40).toFixed(0)}deg`,
+      atraso: `${(i * 0.09).toFixed(2)}s`,
+      bater: `${r(0.26, 0.38).toFixed(2)}s`,
+      tam: r(34, 52),
+    }));
+  }, [chave]);
+  return (
+    <div className="notas" aria-hidden="true">
+      <div className="selo"><Check size={40} strokeWidth={3.4} /></div>
+      {notas.map((n) => (
+        <div key={n.id} className="nota"
+          style={{ left: `${n.esq}%`, animationDelay: n.atraso, "--dx": n.dx, "--giro": n.giro }}>
+          <svg viewBox="-7 -3 78 40" width={n.tam} height={n.tam * 0.51}>
+            <g className="asa asa-e" style={{ animationDuration: n.bater, animationDelay: n.atraso }}>
+              <path d="M20 17 q-12 -14 -19 -8 q-4 4 1 9 q-6 1 -4 6 q3 6 22 1 z"
+                fill="#FFFFFF" stroke="#0B3B41" strokeWidth="1.8" strokeLinejoin="round" />
+              <path d="M7 11 q6 3 11 7 M5 19 q7 -1 14 1" stroke="#B9D3D9" strokeWidth="1.3" fill="none" strokeLinecap="round" />
+            </g>
+            <g className="asa asa-d" style={{ animationDuration: n.bater, animationDelay: n.atraso }}>
+              <path d="M44 17 q12 -14 19 -8 q4 4 -1 9 q6 1 4 6 q-3 6 -22 1 z"
+                fill="#FFFFFF" stroke="#0B3B41" strokeWidth="1.8" strokeLinejoin="round" />
+              <path d="M57 11 q-6 3 -11 7 M59 19 q-7 -1 -14 1" stroke="#B9D3D9" strokeWidth="1.3" fill="none" strokeLinecap="round" />
+            </g>
+            <rect x="18" y="7" width="28" height="20" rx="3" fill="#BFD97F" stroke="#0B3B41" strokeWidth="1.8" />
+            <circle cx="32" cy="17" r="5.4" fill="#EDF6F9" stroke="#0B3B41" strokeWidth="1.4" />
+            <path d="M32 13.4 v7.2 M29.8 15 h4.4 M29.8 19 h4.4" stroke="#0B3B41" strokeWidth="1.2" strokeLinecap="round" />
+            <path d="M22 11 h2.5 M22 23 h2.5 M39.5 11 h2.5 M39.5 23 h2.5" stroke="#0B3B41" strokeWidth="1.2" strokeLinecap="round" />
+          </svg>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const tamValor = (txt) => (txt.length <= 9 ? 48 : txt.length <= 11 ? 42 : txt.length <= 13 ? 35 : 29);
+const tamCartao = (txt) => (txt.length <= 9 ? 18.5 : txt.length <= 11 ? 16.5 : txt.length <= 13 ? 14.5 : 12.5);
+
+const nomeCat = (i) => (i.tipo === "gasto" ? tagPorId(i.tag).nome : nomeReceita(i.tag));
+
+/* ================================================================== */
+/* Tela de senha                                                       */
+/* ================================================================== */
+
+function Cadeado({ primeiroAcesso, onCriar, onEntrar, erro, ambiente, onRestaurar, bloqueado }) {
+  const [s1, setS1] = useState("");
+  const [s2, setS2] = useState("");
+  const [ciente, setCiente] = useState(false);
+  const [ocupado, setOcupado] = useState(false);
+  const [falta, setFalta] = useState("");
+  const arquivo = useRef(null);
+
+  const pendencia = () => {
+    if (s1.length < 6) return `Faltam ${6 - s1.length} caractere(s) na senha.`;
+    if (s1 !== s2) return "As duas senhas estão diferentes.";
+    if (!ciente) return "Toque na caixa para confirmar que entendeu.";
+    return "";
+  };
+
+  const agir = async () => {
+    if (primeiroAcesso) { const p = pendencia(); if (p) { setFalta(p); return; } }
+    else if (!s1) { setFalta("Digite a senha."); return; }
+    setFalta(""); setOcupado(true);
+    try { if (primeiroAcesso) await onCriar(s1); else await onEntrar(s1); }
+    finally { setOcupado(false); }
+  };
+
+  return (
+    <div className="corpo" style={{ paddingTop: 24, paddingBottom: 40 }}>
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+        <ArteCasa w={300} />
+      </div>
+
+      <h1 className="t-xl" style={{ fontSize: 33, marginBottom: 10 }}>
+        {primeiroAcesso ? "Criar a senha da casita" : bloqueado ? "Bloqueado por inatividade" : "Contas da nossa casita"}
+      </h1>
+      <p style={{ fontSize: 15.5, lineHeight: 1.6, marginBottom: 20, color: C.tinta2, fontWeight: 550 }}>
+        {primeiroAcesso
+          ? "Uma senha só, usada pelos dois. Ela embaralha os lançamentos antes de guardar, então sem ela ninguém lê nada."
+          : bloqueado ? "O app ficou mais de cinco minutos em segundo plano. Digite a senha para continuar."
+          : "Digite a senha para abrir os lançamentos."}
+      </p>
+
+      {ambiente.aviso && (
+        <div className="caixa-quente" style={{ marginBottom: 16, display: "flex", gap: 10 }}>
+          <AlertCircle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+          <span>{ambiente.aviso}</span>
+        </div>
+      )}
+
+      <input className="campo" type="password" value={s1} autoComplete="current-password"
+        placeholder={primeiroAcesso ? "Nova senha, mínimo 6 caracteres" : "Senha"}
+        onChange={(e) => { setS1(e.target.value); setFalta(""); }}
+        onKeyDown={(e) => { if (e.key === "Enter") agir(); }} />
+
+      {primeiroAcesso && (
+        <>
+          <input className="campo" type="password" value={s2} style={{ marginTop: 10 }}
+            autoComplete="new-password" placeholder="Repita a senha"
+            onChange={(e) => { setS2(e.target.value); setFalta(""); }}
+            onKeyDown={(e) => { if (e.key === "Enter") agir(); }} />
+
+          <button onClick={() => { setCiente(!ciente); setFalta(""); }}
+            style={{ display: "flex", gap: 13, alignItems: "flex-start", marginTop: 14, textAlign: "left",
+              width: "100%", padding: "15px 16px", borderRadius: 14,
+              border: `2px solid ${ciente ? C.acento : C.linha}`, background: ciente ? C.suave : C.papel }}>
+            <span style={{ width: 26, height: 26, borderRadius: 8, flexShrink: 0,
+              border: `2px solid ${ciente ? C.acento : "#7C9BA2"}`, background: ciente ? C.acento : "transparent",
+              display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {ciente && <Check size={16} color="#fff" strokeWidth={3.2} />}
+            </span>
+            <span style={{ fontSize: 14.5, lineHeight: 1.5, fontWeight: 600 }}>
+              Entendi que esta senha não pode ser recuperada. Se os dois esquecerem, os lançamentos se perdem.
+            </span>
+          </button>
+
+          <div className="caixa-suave" style={{ marginTop: 12 }}>
+            Não use uma senha de banco ou de e-mail. Exporte a planilha uma vez por mês:
+            ela sai legível e serve de cópia de segurança.
+          </div>
+        </>
+      )}
+
+      {(erro || falta) && (
+        <p style={{ color: C.gasto, fontSize: 15, marginTop: 14, fontWeight: 650, lineHeight: 1.5 }}>{erro || falta}</p>
+      )}
+
+      <button className="b-forte" data-off={primeiroAcesso && pendencia() ? "1" : "0"}
+        style={{ marginTop: 18 }} onClick={agir} disabled={ocupado}>
+        {ocupado ? "Abrindo, aguarde" : primeiroAcesso ? "Criar senha e começar" : "Entrar"}
+      </button>
+
+      {!bloqueado && (
+        <>
+          <button className="b-fraco" style={{ marginTop: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 9 }}
+            onClick={() => arquivo.current && arquivo.current.click()}>
+            <Upload size={16} /> Abrir cópia de segurança
+          </button>
+          <input ref={arquivo} type="file" accept=".json,application/json" style={{ display: "none" }}
+            onChange={(e) => {
+              const f = e.target.files && e.target.files[0];
+              if (!f) return;
+              const fr = new FileReader();
+              fr.onload = () => onRestaurar(String(fr.result));
+              fr.readAsText(f);
+              e.target.value = "";
+            }} />
+        </>
+      )}
+
+      <p className="t-mini" style={{ marginTop: 16, textAlign: "center", lineHeight: 1.6 }}>
+        Criptografia: {ambiente.cripto}<br />Armazenamento: {ambiente.rotulo}
+      </p>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/* Lançar (tela principal)                                             */
+/* ================================================================== */
+
+function Lancar({ cofre, onSalvar, onFechar, editando, modo, gastoNoMes }) {
+  const editRec = !!(editando && editando.recorrente);
+  const tipo = editando ? editando.tipo : (modo === "receita" ? "receita" : "gasto");
+  const [centavos, setCentavos] = useState(editando ? editando.valor : 0);
+  const [tag, setTag] = useState(editando ? editando.tag : null);
+  const [quem, setQuem] = useState(editando ? editando.quem : null);
+  const [data, setData] = useState(editando ? editando.data : hojeISO());
+  const [repete, setRepete] = useState(editRec);
+  const [obs, setObs] = useState(editando && editando.obs ? editando.obs : "");
+
+  const digitar = useCallback((d) => setCentavos((c) => (c * 10 + d > 99999999 ? c : c * 10 + d)), []);
+  const apagar = useCallback(() => setCentavos((c) => Math.floor(c / 10)), []);
+
+  useEffect(() => {
+    const h = (e) => {
+      if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+      if (/^[0-9]$/.test(e.key)) { e.preventDefault(); digitar(Number(e.key)); }
+      else if (e.key === "Backspace") { e.preventDefault(); apagar(); }
+      else if (e.key === "Escape" && onFechar) onFechar();
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [digitar, apagar, onFechar]);
+
+  const lista = tipo === "gasto" ? TAGS : TAGS_RECEITA;
+  const pronto = centavos > 0 && !!tag && !!quem;
+  const tagSel = tag ? lista.find((t) => t.id === tag) : null;
+  const teto = tipo === "gasto" && tag && cofre.tetos ? cofre.tetos[tag] : null;
+  const gastoCat = tipo === "gasto" && tag && gastoNoMes ? gastoNoMes[tag] || 0 : 0;
+
+  const rotulo = () => {
+    if (editando) return editRec ? "Salvar para todos os meses" : "Salvar alteração";
+    if (!quem) return "Escolha quem pagou";
+    if (!tag) return tipo === "gasto" ? "Escolha a categoria" : "Escolha o tipo";
+    if (centavos === 0) return "Digite o valor";
+    if (repete) return `Repetir ${brl(centavos)} todo mês`;
+    return `Lançar ${brl(centavos)}`;
+  };
+
+  const titulo = editando
+    ? (editRec ? "Editar recorrente" : "Editar lançamento")
+    : tipo === "receita" ? "Nova receita" : "Novo gasto";
+
+  const montar = () => {
+    const base = { id: editando ? editando.id : novoId(), tipo, valor: centavos, tag, quem, data };
+    const t = obs.trim();
+    if (t) base.obs = t.slice(0, 80);
+    return base;
+  };
+
+  const lancar = (escopo) => {
+    if (!pronto) return;
+    onSalvar(montar(), { repete, escopo: escopo || "todos" });
+    if (!editando) { setCentavos(0); setTag(null); setRepete(false); setData(hojeISO()); setObs(""); }
+  };
+
+  const linhaResumo = () => {
+    const partes = [];
+    if (tagSel) partes.push(tagSel.nome);
+    if (quem) partes.push(quem);
+    if (!partes.length) return "Escolha quem pagou e a categoria";
+    let txt = partes.join(", ");
+    if (teto) txt += ` · ${brl(gastoCat)} de ${brl(teto)} no mês`;
+    return txt;
+  };
+
+  return (
+    <div>
+      <div className="topo divisor">
+        {(editando || modo === "receita") ? (
+          <button className="toque" onClick={onFechar} aria-label="Fechar"><X size={22} /></button>
+        ) : <span style={{ width: 10 }} />}
+        <span className="t-tela">{titulo}</span>
+        <span style={{ width: 34 }} />
+      </div>
+
+      <div className="corpo" style={{ paddingTop: 14 }}>
+        <div className="t-rot" style={{ marginBottom: 8 }}>Quem pagou</div>
+        <div style={{ display: "flex", gap: 10, marginBottom: 18 }}>
+          {cofre.pessoas.map((p, idx) => (
+            <button key={p} className="pessoa" data-p={idx} data-on={quem === p ? "1" : "0"}
+              onClick={() => setQuem(p)} aria-pressed={quem === p} style={{ flex: 1 }}>
+              {p}
+            </button>
+          ))}
+        </div>
+
+        <div className="t-rot" style={{ marginBottom: 8 }}>
+          {tipo === "gasto" ? "Categoria" : "Tipo de receita"}
+        </div>
+        <div className="grade" style={{ marginBottom: 18 }}>
+          {lista.map((t) => (
+            <button key={t.id} className="tile" data-on={tag === t.id ? "1" : "0"}
+              onClick={() => setTag(t.id)} aria-pressed={tag === t.id}>
+              {t.nome}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 6, color: C.tinta2, fontSize: 14, fontWeight: 700,
+            border: `1.5px solid ${C.linha}`, borderRadius: 999, height: 40, padding: "0 15px", position: "relative", whiteSpace: "nowrap" }}>
+            <CalendarDays size={14} />
+            {data === hojeISO() ? "Hoje" : dataCurta(data)}
+            <input type="date" value={data} aria-label="Data do lançamento"
+              onChange={(e) => setData(e.target.value || hojeISO())}
+              style={{ position: "absolute", inset: 0, opacity: 0, width: "100%", height: "100%" }} />
+          </label>
+          {!editando && (
+            <button className="chip" data-on={repete ? "1" : "0"} onClick={() => setRepete(!repete)}
+              aria-pressed={repete} style={{ height: 40, fontSize: 14, padding: "0 14px" }}>
+              <Repeat size={14} /> Repete todo mês
+            </button>
+          )}
+        </div>
+
+        <div className="t-rot" style={{ marginBottom: 2 }}>Valor</div>
+        <div className="t-xl n" style={{ fontSize: tamValor(brl(centavos)), marginBottom: 14,
+          color: centavos === 0 ? "#9FB9BF" : tipo === "gasto" ? C.tinta : C.acento,
+          whiteSpace: "nowrap", overflow: "hidden" }}>
+          {brl(centavos)}
+        </div>
+
+        <input className="campo" value={obs} maxLength={80} aria-label="Observação, opcional"
+          placeholder="Observação (opcional)" style={{ marginBottom: 12, fontSize: 15 }}
+          onChange={(e) => setObs(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.target.blur(); } }} />
+
+        <button className="b-lancar" data-off={pronto ? "0" : "1"} onClick={() => lancar("todos")} style={{ marginBottom: 6 }}>
+          {pronto && !editando && <Check size={22} strokeWidth={3} />}
+          {rotulo()}
+        </button>
+        {editRec && editando.instanciaMes && (
+          <button className="b-fraco" onClick={() => lancar("mes")} style={{ marginBottom: 6, marginTop: 4 }}>
+            Salvar só em {rotuloMes(editando.instanciaMes)}
+          </button>
+        )}
+        <p className="t-mini" style={{ textAlign: "center", marginBottom: 18, minHeight: 32, lineHeight: 1.35,
+          color: teto && gastoCat >= teto ? C.gasto : C.tinta2 }}>
+          {linhaResumo()}
+        </p>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 22 }}>
+          {[1,2,3,4,5,6,7,8,9].map((k) => (
+            <button key={k} className="tecla n" onClick={() => digitar(k)}>{k}</button>
+          ))}
+          <button className="tecla" onClick={() => setCentavos(0)} style={{ fontSize: 14.5, fontWeight: 700, color: C.tinta2 }}>limpar</button>
+          <button className="tecla n" onClick={() => digitar(0)}>0</button>
+          <button className="tecla" onClick={apagar} aria-label="Apagar último dígito"><Delete size={22} /></button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/* Mês                                                                 */
+/* ================================================================== */
+
+function Mes({ ym, setYm, itens, itensAnt, semana, tetos, precisaBackup, irAjustes, sincronizar, sincronizando, ambiente, onNovoGasto }) {
+  const gastos = itens.filter((i) => i.tipo === "gasto").reduce((s, i) => s + i.valor, 0);
+  const receitas = itens.filter((i) => i.tipo === "receita").reduce((s, i) => s + i.valor, 0);
+  const saldo = receitas - gastos;
+  const gastosAnt = itensAnt.filter((i) => i.tipo === "gasto").reduce((s, i) => s + i.valor, 0);
+  const delta = gastosAnt > 0 ? Math.round(((gastos - gastosAnt) / gastosAnt) * 100) : null;
+
+  const dados = useMemo(() => {
+    const at = {}, an = {};
+    itens.filter((i) => i.tipo === "gasto").forEach((i) => { at[i.tag] = (at[i.tag] || 0) + i.valor; });
+    itensAnt.filter((i) => i.tipo === "gasto").forEach((i) => { an[i.tag] = (an[i.tag] || 0) + i.valor; });
+    return TAGS.map((t) => ({ ...t, valor: at[t.id] || 0, antes: an[t.id] || 0, teto: tetos[t.id] || 0 }))
+      .filter((d) => d.valor > 0 || d.antes > 0 || d.teto > 0)
+      .sort((a, b) => b.valor - a.valor);
+  }, [itens, itensAnt, tetos]);
+  const maior = Math.max(...dados.map((d) => Math.max(d.valor, d.antes, d.teto)), 1);
+
+  const pizza = useMemo(() => {
+    const comGasto = dados.filter((d) => d.valor > 0).sort((a, b) => b.valor - a.valor);
+    if (comGasto.length <= 7) return comGasto;
+    const topo = comGasto.slice(0, 6);
+    const resto = comGasto.slice(6).reduce((s, d) => s + d.valor, 0);
+    return [...topo, { id: "demais", nome: "Outras", cor: "#BFC8CC", valor: resto }];
+  }, [dados]);
+  const estourados = dados.filter((d) => d.teto > 0 && d.valor > d.teto).length;
+
+  return (
+    <div>
+      <div className="topo divisor" style={{ justifyContent: "space-between" }}>
+        <NavMes ym={ym} setYm={setYm} />
+        <VoltarLancar onVoltar={onNovoGasto} />
+      </div>
+
+      <div className="corpo" style={{ paddingTop: 16 }}>
+        {semana && (
+          <div style={{ background: C.tinta, color: "#fff", borderRadius: 16, padding: "14px 16px", marginBottom: 12,
+            display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 650, opacity: .8 }}>Últimos 7 dias</div>
+              <div className="n" style={{ fontSize: 27, fontWeight: 800, letterSpacing: "-.025em", marginTop: 2 }}>{brl(semana.atual)}</div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              {semana.anterior > 0 ? (
+                <>
+                  <div style={{ fontSize: 16.5, fontWeight: 800, color: semana.atual > semana.anterior ? C.tangerina : C.aqua,
+                    display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 2 }}>
+                    {semana.atual > semana.anterior ? <ArrowUpRight size={15} /> : <ArrowDownRight size={15} />}
+                    {Math.abs(Math.round(((semana.atual - semana.anterior) / semana.anterior) * 100))}%
+                  </div>
+                  <div style={{ fontSize: 12.5, opacity: .75, fontWeight: 600 }}>vs. 7 dias antes</div>
+                </>
+              ) : (
+                <div style={{ fontSize: 12.5, opacity: .75, fontWeight: 600 }}>{semana.maior ? `maior: ${semana.maior}` : "sem gastos"}</div>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 8, marginBottom: 22 }}>
+          <Cartao rot="Entrou" val={brl(receitas)} cor={C.acento} fundo={C.suave} />
+          <Cartao rot="Saiu" val={brl(gastos)} cor={C.gasto} fundo={C.quente}
+            extra={delta !== null && (
+              <div style={{ display: "flex", alignItems: "center", gap: 2, marginTop: 2, fontSize: 12, fontWeight: 700, color: delta > 0 ? C.gasto : C.acento }}>
+                {delta > 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}{Math.abs(delta)}% vs. anterior
+              </div>
+            )} />
+          <Cartao rot="Sobrou" val={brl(saldo)} cor={saldo < 0 ? C.gasto : C.tinta}
+            fundo={saldo < 0 ? C.quente : C.papel} extra={<div style={{ height: 0 }} />} />
+        </div>
+
+        {estourados > 0 && (
+          <div className="caixa-quente" style={{ marginBottom: 16, display: "flex", gap: 10 }}>
+            <AlertCircle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+            <span>{estourados === 1 ? "Uma categoria passou do teto." : `${estourados} categorias passaram do teto.`}</span>
+          </div>
+        )}
+
+        {dados.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "4px 0 24px" }}>
+            <ArtePote w={200} />
+            <p style={{ marginTop: 10, lineHeight: 1.6, color: C.tinta2, fontSize: 15, fontWeight: 550 }}>
+              Nenhum gasto em {rotuloMes(ym)}.<br />Lance o primeiro na aba Lançar.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="t-rot" style={{ marginBottom: 10 }}>Divisão dos gastos</div>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
+              <Pizza dados={pizza} total={gastos} tam={200} />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 9, marginBottom: 26 }}>
+              {pizza.map((d) => (
+                <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
+                  <span style={{ width: 14, height: 14, borderRadius: 5, background: d.cor, flexShrink: 0 }} />
+                  <span style={{ flex: 1, fontSize: 15, fontWeight: 600, overflow: "hidden",
+                    textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{d.nome}</span>
+                  <span className="n" style={{ fontSize: 14.5, fontWeight: 650, color: C.tinta2, flexShrink: 0 }}>
+                    {brlCurto(d.valor)}
+                  </span>
+                  <span className="n" style={{ fontSize: 15, fontWeight: 750, flexShrink: 0, minWidth: 38, textAlign: "right" }}>
+                    {Math.round((d.valor / gastos) * 100)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="t-rot" style={{ marginBottom: 14 }}>Onde foi o dinheiro</div>
+            {dados.map((d) => {
+              const dif = d.antes > 0 && d.valor > 0 ? Math.round(((d.valor - d.antes) / d.antes) * 100) : null;
+              const pct = gastos > 0 ? Math.round((d.valor / gastos) * 100) : 0;
+              const passou = d.teto > 0 && d.valor > d.teto;
+              const perto = d.teto > 0 && !passou && d.valor >= d.teto * 0.8;
+              return (
+                <div key={d.id} style={{ marginBottom: 18 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 7, gap: 10 }}>
+                    <span className="t-item" style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
+                      <span style={{ width: 28, height: 28, borderRadius: 8, background: d.cor, flexShrink: 0,
+                        display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <d.Icon size={15} color={C.tinta} strokeWidth={2.4} />
+                      </span>
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.nome}</span>
+                      <span className="t-mini">{pct}%</span>
+                    </span>
+                    <span className="n" style={{ fontSize: 17, fontWeight: 750, whiteSpace: "nowrap", color: passou ? C.gasto : C.tinta }}>{brl(d.valor)}</span>
+                  </div>
+                  <div className="trilho" style={{ marginBottom: 5 }}>
+                    <div style={{ width: `${Math.min(100, (d.valor / maior) * 100)}%`, height: "100%", background: d.cor, borderRadius: 999, boxShadow: passou ? `inset 0 0 0 2px ${C.gasto}` : "none" }} />
+                    {d.teto > 0 && <div className="marca" style={{ left: `${Math.min(100, (d.teto / maior) * 100)}%` }} />}
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                    <span className="t-mini" style={{ color: passou ? C.gasto : perto ? "#8A4B33" : C.tinta2, fontWeight: passou || perto ? 700 : 550 }}>
+                      {d.teto > 0
+                        ? (passou ? `passou ${brlCurto(d.valor - d.teto)} do teto de ${brlCurto(d.teto)}`
+                          : `${Math.round((d.valor / d.teto) * 100)}% do teto de ${brlCurto(d.teto)}`)
+                        : `mês anterior ${d.antes > 0 ? brlCurto(d.antes) : "sem gasto"}`}
+                    </span>
+                    {dif !== null && (
+                      <span style={{ fontSize: 13, fontWeight: 750, color: dif > 0 ? C.gasto : C.acento, whiteSpace: "nowrap" }}>
+                        {dif > 0 ? "+" : ""}{dif}% vs. anterior
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </>
+        )}
+
+        {ambiente.rotulo.startsWith("base compartilhada") && (
+          <button className="b-fraco" onClick={sincronizar} disabled={sincronizando}
+            style={{ marginTop: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+            <RefreshCw size={16} /> {sincronizando ? "Buscando" : "Buscar lançamentos do outro celular"}
+          </button>
+        )}
+
+        {precisaBackup && (
+          <div className="caixa-quente" style={{ marginTop: 14, display: "flex", gap: 12, alignItems: "center" }}>
+            <span style={{ flex: 1 }}>Faz mais de 30 dias que a planilha não é exportada.</span>
+            <button onClick={irAjustes} style={{ fontWeight: 750, color: C.gasto, whiteSpace: "nowrap" }}>Exportar</button>
+          </div>
+        )}
+        <div style={{ height: 18 }} />
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/* Lançamentos                                                         */
+/* ================================================================== */
+
+function Lista({ ym, setYm, itens, onExcluir, onEditar, onNovoGasto }) {
+  const porDia = useMemo(() => {
+    const m = {};
+    [...itens].sort((a, b) => b.data.localeCompare(a.data) || (b.id > a.id ? 1 : -1)).forEach((i) => {
+      (m[i.data] = m[i.data] || []).push(i);
+    });
+    return Object.entries(m);
+  }, [itens]);
+  const total = itens.filter((i) => i.tipo === "gasto").reduce((s, i) => s + i.valor, 0);
+
+  return (
+    <div>
+      <div className="topo divisor" style={{ justifyContent: "space-between" }}>
+        <NavMes ym={ym} setYm={setYm} />
+        <VoltarLancar onVoltar={onNovoGasto} />
+      </div>
+      <div className="corpo" style={{ paddingTop: 6 }}>
+        {porDia.length === 0 ? (
+          <div style={{ textAlign: "center", paddingTop: 24 }}>
+            <ArteRecibo w={190} />
+            <p style={{ marginTop: 8, color: C.tinta2, fontSize: 15, fontWeight: 550 }}>Nada lançado neste mês.</p>
+          </div>
+        ) : (
+          <div className="t-mini" style={{ margin: "12px 0 2px", display: "flex", justifyContent: "space-between" }}>
+            <span>{itens.length} lançamento(s)</span>
+            <span className="n">gastos {brl(total)}</span>
+          </div>
+        )}
+        {porDia.map(([dia, ls]) => (
+          <div key={dia} style={{ marginBottom: 10 }}>
+            <div className="t-rot" style={{ margin: "16px 0 4px" }}>{dataCurta(dia)}</div>
+            {ls.map((i) => {
+              const t = i.tipo === "gasto" ? tagPorId(i.tag) : (TAGS_RECEITA.find((r) => r.id === i.tag) || TAGS_RECEITA[0]);
+              return (
+                <div key={i.id} className="divisor" style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0" }}>
+                  <span style={{ width: 40, height: 40, borderRadius: 11, flexShrink: 0, background: t.cor,
+                    display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <t.Icon size={18} color={C.tinta} strokeWidth={2.3} />
+                  </span>
+                  <button onClick={() => onEditar(i)} style={{ flex: 1, textAlign: "left", minHeight: 44, minWidth: 0 }}>
+                    <div className="t-item" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.nome}</div>
+                    <div className="t-mini" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {i.quem}{i.virtual ? ", repete todo mês" : i.recorrenteId ? ", ajustado este mês" : ""}
+                      {i.obs ? ` · ${i.obs}` : ""}
+                    </div>
+                  </button>
+                  <span className="n" style={{ fontSize: 17, fontWeight: 750, whiteSpace: "nowrap",
+                    color: i.tipo === "receita" ? C.acento : C.tinta }}>
+                    {i.tipo === "receita" ? "+ " : ""}{brl(i.valor)}
+                  </span>
+                  {!i.virtual ? (
+                    <button className="toque" onClick={() => onExcluir(i)} aria-label="Excluir" style={{ color: "#7C9BA2" }}>
+                      <Trash2 size={18} />
+                    </button>
+                  ) : (
+                    <button className="toque" onClick={() => onEditar(i)} aria-label="Editar" style={{ color: "#7C9BA2" }}>
+                      <Pencil size={17} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+        <div style={{ height: 18 }} />
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/* Ajustes                                                             */
+/* ================================================================== */
+
+function Tetos({ tetos, onMudar }) {
+  const paraTexto = (v) => (v ? String(Math.round(v / 100)) : "");
+  const [rascunho, setRascunho] = useState(() => {
+    const r = {};
+    TAGS.forEach((t) => { r[t.id] = paraTexto(tetos[t.id]); });
+    return r;
+  });
+  const focado = useRef(null);
+
+  /* Se o outro celular mudar um teto, o campo acompanha, menos aquele que
+     estiver sendo digitado agora. Sem isto, sair do campo gravaria o valor velho. */
+  useEffect(() => {
+    setRascunho((atual) => {
+      let mudou = false;
+      const novo = { ...atual };
+      TAGS.forEach((t) => {
+        if (focado.current === t.id) return;
+        const esperado = paraTexto(tetos[t.id]);
+        if (novo[t.id] !== esperado) { novo[t.id] = esperado; mudou = true; }
+      });
+      return mudou ? novo : atual;
+    });
+  }, [tetos]);
+  const aplicar = (id) => {
+    const n = parseInt(String(rascunho[id]).replace(/\D/g, ""), 10);
+    onMudar(id, isNaN(n) || n <= 0 ? 0 : n * 100);
+  };
+  return (
+    <div>
+      {TAGS.map((t) => (
+        <div key={t.id} className="divisor" style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0" }}>
+          <span style={{ width: 10, height: 26, borderRadius: 4, background: t.cor, flexShrink: 0 }} />
+          <span className="t-item" style={{ flex: 1 }}>{t.nome}</span>
+          <span className="t-mini">R$</span>
+          <input className="campo-teto n" inputMode="numeric" placeholder="sem teto"
+            value={rascunho[t.id]} aria-label={`Teto de ${t.nome}`}
+            onChange={(e) => setRascunho({ ...rascunho, [t.id]: e.target.value.replace(/\D/g, "") })}
+            onFocus={() => { focado.current = t.id; }}
+            onBlur={() => { focado.current = null; aplicar(t.id); }}
+            onKeyDown={(e) => { if (e.key === "Enter") { aplicar(t.id); e.target.blur(); } }} />
+        </div>
+      ))}
+      <p className="t-mini" style={{ marginTop: 10, lineHeight: 1.6 }}>
+        Valor mensal em reais, sem centavos. Deixe vazio para não ter teto. O aviso aparece na aba Mês
+        e na hora de lançar quando passar de 80%.
+      </p>
+    </div>
+  );
+}
+
+function Ajustes({ cofre, setCofre, exportar, trocarSenha, ambiente, salvarCopia, lerCopia,
+  onEditarRecorrente, onEncerrarRecorrente, onNovaReceita, onMudarTeto, avisar, onNovoGasto, onPedirZerar }) {
+  const [n1, setN1] = useState(cofre.pessoas[0]);
+  const [n2, setN2] = useState(cofre.pessoas[1]);
+  const editandoNome = useRef(false);
+  useEffect(() => {
+    if (editandoNome.current) return;
+    setN1(cofre.pessoas[0]); setN2(cofre.pessoas[1]);
+  }, [cofre.pessoas]);
+  const [s1, setS1] = useState("");
+  const [s2, setS2] = useState("");
+  const [s3, setS3] = useState("");
+  const arquivo = useRef(null);
+
+  const salvarNomes = () => {
+    const velhos = cofre.pessoas;
+    const novos = [n1.trim() || "Pessoa 1", n2.trim() || "Pessoa 2"];
+    const troca = (q) => (q === velhos[0] ? novos[0] : q === velhos[1] ? novos[1] : q);
+    setCofre((c) => ({ ...c, pessoas: novos,
+      lancamentos: c.lancamentos.map((l) => ({ ...l, quem: troca(l.quem) })),
+      fixas: c.fixas.map((f) => ({ ...f, quem: troca(f.quem) })) }));
+    avisar("Nomes salvos.");
+  };
+
+  const recorrentes = [...cofre.fixas].filter((f) => !f.ate || f.ate >= chaveMes(hojeISO()));
+
+  return (
+    <div>
+      <div className="topo divisor"><span className="t-tela">Ajustes</span><VoltarLancar onVoltar={onNovoGasto} /></div>
+      <div className="corpo" style={{ paddingTop: 22 }}>
+
+        <div className="t-rot" style={{ marginBottom: 10 }}>Receitas</div>
+        <div style={{ position: "relative", marginBottom: 32 }}>
+          <ArteCartao />
+          <div style={{ position: "absolute", left: "7%", right: "7%", bottom: "7%" }}>
+            <button className="b-lancar" onClick={onNovaReceita}
+              style={{ height: 58, fontSize: 17, background: C.quente, color: "#6B3220",
+                boxShadow: "0 4px 0 #D9A98F, 0 8px 18px rgba(6,52,59,.35)" }}>
+              <PlusCircle size={19} strokeWidth={2.6} /> Lançar receita
+            </button>
+          </div>
+        </div>
+        <p className="t-mini" style={{ marginTop: -20, marginBottom: 32, lineHeight: 1.6 }}>
+          Salário e renda extra entram por aqui. Marque "Repete todo mês" e o salário passa a entrar sozinho.
+        </p>
+
+        <Secao titulo="Lançamentos que repetem todo mês">
+          {recorrentes.length === 0 && (
+            <p className="t-mini" style={{ lineHeight: 1.6 }}>
+              Nenhum ainda. Ao lançar um gasto ou receita, toque em "Repete todo mês".
+            </p>
+          )}
+          {recorrentes.map((f) => {
+            const tipo = f.tipo || "receita";
+            const t = tipo === "gasto" ? tagPorId(f.tag) : (TAGS_RECEITA.find((r) => r.id === f.tag) || TAGS_RECEITA[0]);
+            return (
+              <div key={f.id} className="divisor" style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0" }}>
+                <span style={{ width: 40, height: 40, borderRadius: 11, background: t.cor, flexShrink: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <t.Icon size={17} color={C.tinta} strokeWidth={2.3} />
+                </span>
+                <button onClick={() => onEditarRecorrente(f)} style={{ flex: 1, textAlign: "left", minHeight: 44, minWidth: 0 }}>
+                  <div className="t-item" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.nome}</div>
+                  <div className="t-mini">{f.quem}, todo dia {Number(f.desde.slice(8, 10))}, desde {f.desde.slice(5, 7)}/{f.desde.slice(0, 4)}</div>
+                </button>
+                <span className="n" style={{ fontSize: 17, fontWeight: 750, color: tipo === "receita" ? C.acento : C.tinta }}>
+                  {tipo === "receita" ? "+ " : ""}{brl(f.valor)}
+                </span>
+                <button className="toque" aria-label="Encerrar" style={{ color: "#7C9BA2" }} onClick={() => onEncerrarRecorrente(f)}>
+                  <Ban size={18} />
+                </button>
+              </div>
+            );
+          })}
+          {recorrentes.length > 0 && (
+            <p className="t-mini" style={{ marginTop: 9, lineHeight: 1.6 }}>
+              Encerrar mantém os meses passados e para de repetir a partir do mês que vem.
+            </p>
+          )}
+        </Secao>
+
+        <Secao titulo="Teto por categoria">
+          <Tetos tetos={cofre.tetos || {}} onMudar={onMudarTeto} />
+        </Secao>
+
+        <Secao titulo="Planilha">
+          <button className="b-forte" onClick={() => {
+            try { exportar(); avisar("Planilha gerada."); }
+            catch (e) { avisar("Não foi possível gerar a planilha: " + e.message, true); }
+          }} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 9 }}>
+            <Download size={18} /> Exportar planilha completa
+          </button>
+          <p className="t-mini" style={{ marginTop: 9, lineHeight: 1.6 }}>
+            Arquivo .xlsx com todos os lançamentos dos dois, resumo por categoria com tetos, e saldo por mês.
+            {cofre.ultimoExport ? ` Última vez em ${cofre.ultimoExport.split("-").reverse().join("/")}.` : ""}
+          </p>
+        </Secao>
+
+        <Secao titulo="Cópia de segurança">
+          {ambiente.aviso && (
+            <div className="caixa-quente" style={{ marginBottom: 12, display: "flex", gap: 10 }}>
+              <AlertCircle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+              <span>{ambiente.aviso}</span>
+            </div>
+          )}
+          <button className="b-fraco" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 9 }}
+            onClick={async () => {
+              try { await salvarCopia(); avisar("Cópia salva no seu aparelho."); }
+              catch (e) { avisar("Não deu para salvar a cópia: " + e.message, true); }
+            }}>
+            <Save size={16} /> Salvar cópia de segurança
+          </button>
+          <button className="b-fraco" style={{ marginTop: 9, display: "flex", alignItems: "center", justifyContent: "center", gap: 9 }}
+            onClick={() => arquivo.current && arquivo.current.click()}>
+            <Upload size={16} /> Juntar cópia do outro celular
+          </button>
+          <input ref={arquivo} type="file" accept=".json,application/json" style={{ display: "none" }}
+            onChange={(e) => {
+              const f = e.target.files && e.target.files[0];
+              if (!f) return;
+              const fr = new FileReader();
+              fr.onload = async () => { const r = await lerCopia(String(fr.result)); avisar(r.texto, !r.ok); };
+              fr.readAsText(f);
+              e.target.value = "";
+            }} />
+          <p className="t-mini" style={{ marginTop: 9, lineHeight: 1.6 }}>
+            A cópia sai embaralhada e só abre com a senha de vocês.
+          </p>
+        </Secao>
+
+        <Secao titulo="Quem usa">
+          <div style={{ display: "flex", gap: 9 }}>
+            <input className="campo" value={n1} aria-label="Primeiro nome"
+              onFocus={() => { editandoNome.current = true; }} onBlur={() => { editandoNome.current = false; }}
+              onChange={(e) => setN1(e.target.value)} />
+            <input className="campo" value={n2} aria-label="Segundo nome"
+              onFocus={() => { editandoNome.current = true; }} onBlur={() => { editandoNome.current = false; }}
+              onChange={(e) => setN2(e.target.value)} />
+          </div>
+          <button className="b-fraco" style={{ marginTop: 10 }} onClick={salvarNomes}>Salvar nomes</button>
+        </Secao>
+
+        <Secao titulo="Trocar a senha">
+          <input className="campo" type="password" placeholder="Senha atual" value={s1} onChange={(e) => setS1(e.target.value)} />
+          <input className="campo" type="password" placeholder="Nova senha" value={s2} style={{ marginTop: 9 }} onChange={(e) => setS2(e.target.value)} />
+          <input className="campo" type="password" placeholder="Repita a nova senha" value={s3} style={{ marginTop: 9 }} onChange={(e) => setS3(e.target.value)} />
+          {s2.length > 0 && s2.length < 6 && <p className="t-mini" style={{ marginTop: 7 }}>A nova senha precisa de pelo menos 6 caracteres.</p>}
+          {s3.length > 0 && s2 !== s3 && <p className="t-mini" style={{ marginTop: 7 }}>As duas novas senhas estão diferentes.</p>}
+          <button className="b-fraco" style={{ marginTop: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 9 }}
+            disabled={!s1 || s2.length < 6 || s2 !== s3}
+            onClick={async () => {
+              const r = await trocarSenha(s1, s2);
+              avisar(r.texto, !r.ok);
+              if (r.ok) { setS1(""); setS2(""); setS3(""); }
+            }}>
+            <KeyRound size={16} /> Trocar senha
+          </button>
+        </Secao>
+
+        <Secao titulo="Zona de risco">
+          <button className="b-fraco" onClick={onPedirZerar}
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 9,
+              color: C.gasto, borderColor: "#E8C4B6", fontWeight: 750 }}>
+            <Trash2 size={17} /> Apagar tudo e recomeçar
+          </button>
+          <p className="t-mini" style={{ marginTop: 9, lineHeight: 1.6 }}>
+            Zera lançamentos, recorrentes, tetos e a senha. Exporte a planilha antes, porque não há volta.
+          </p>
+        </Secao>
+
+        <div className="caixa-suave">
+          Os lançamentos ficam embaralhados com a senha de vocês, então nem quem tiver o link consegue ler sem ela.
+          O app se bloqueia sozinho após cinco minutos em segundo plano.
+          Criptografia: {ambiente.cripto}. Armazenamento: {ambiente.rotulo}.
+        </div>
+        <div style={{ height: 22 }} />
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/* App                                                                 */
+/* ================================================================== */
+
+const BLOQUEIO_MS = 5 * 60 * 1000;
+
+export default function App() {
+  const [estado, setEstado] = useState("carregando");
+  const [erro, setErro] = useState("");
+  const [chave, setChave] = useState(null);
+  const [salt, setSalt] = useState(null);
+  const [cofre, setCofre] = useState(COFRE_VAZIO);
+  const [aba, setAba] = useState(null);
+  const [festa, setFesta] = useState(null);
+  const [editando, setEditando] = useState(null);
+  const [novaReceita, setNovaReceita] = useState(false);
+  const [ym, setYm] = useState(chaveMes(hojeISO()));
+  const [sincronizando, setSincronizando] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [pacoteImportado, setPacoteImportado] = useState(null);
+  const [bloqueado, setBloqueado] = useState(false);
+  const [confirmandoZerar, setConfirmandoZerar] = useState(false);
+  const [ambiente, setAmbiente] = useState({
+    rotulo: "verificando", aviso: "", grave: false,
+    cripto: temSubtle() ? "AES do navegador" : "modo compatível",
+  });
+  const pronto = useRef(false);
+  const gravando = useRef(false);
+  const pendente = useRef(false);
+  const toastTimer = useRef(null);
+  const desfazerRef = useRef(null);
+  const escondidoEm = useRef(null);
+  const reconferir = useRef(null);
+  const cofreRef = useRef(cofre);
+  useEffect(() => { cofreRef.current = cofre; }, [cofre]);
+
+  const avisar = useCallback((texto, erro, desfazer) => {
+    clearTimeout(toastTimer.current);
+    desfazerRef.current = desfazer || null;
+    setToast({ texto, erro: !!erro, desfazer: !!desfazer });
+    toastTimer.current = setTimeout(() => { setToast(null); desfazerRef.current = null; }, desfazer ? 6000 : 3200);
+  }, []);
+
+  const desfazer = () => {
+    if (desfazerRef.current) desfazerRef.current();
+    desfazerRef.current = null;
+    clearTimeout(toastTimer.current);
+    setToast(null);
+  };
+
+  useEffect(() => {
+    (async () => {
+      const modo = await guarda.detectar();
+      const a = AMBIENTES[modo];
+      setAmbiente((x) => ({ ...x, rotulo: a.rotulo, aviso: a.aviso, grave: a.grave }));
+      const r = await guarda.ler(CHAVE_COFRE);
+      let temBase = false;
+      if (r && r.value) {
+        try { const pac = JSON.parse(r.value); temBase = !!pac.dados; } catch (e) { temBase = false; }
+      }
+      setEstado(temBase ? "travado" : "novo");
+    })();
+  }, []);
+
+  const caiuParaMemoria = () => {
+    guarda.modo = "memoria";
+    const a = AMBIENTES.memoria;
+    setAmbiente((x) => ({ ...x, rotulo: a.rotulo, aviso: a.aviso, grave: true }));
+  };
+
+  const empacotar = useCallback(async (c) =>
+    JSON.stringify({ v: 2, salt: b64.enc(salt), dados: await cifrar(chave, JSON.stringify(c)) }), [chave, salt]);
+
+  /* Devolve o cofre remoto, ou { __zerado } quando o outro aparelho apagou tudo. */
+  const lerRemoto = useCallback(async () => {
+    const r = await guarda.ler(CHAVE_COFRE);
+    if (!r || !r.value) return null;
+    let pacote;
+    try { pacote = JSON.parse(r.value); } catch (e) { return null; }
+    if (pacote && pacote.zerado) return { __zerado: pacote.zerado };
+    try { return JSON.parse(await decifrar(chave, pacote.dados)); } catch (e) { return null; }
+  }, [chave]);
+
+  const aplicarZeramento = useCallback(() => {
+    pronto.current = false;
+    clearTimeout(reconferir.current);
+    setChave(null); setSalt(null); setCofre(COFRE_VAZIO);
+    setEditando(null); setNovaReceita(false); setPacoteImportado(null);
+    setConfirmandoZerar(false); setBloqueado(false); setAba(null); setYm(chaveMes(hojeISO()));
+    setErro("A base foi apagada no outro aparelho. Crie uma senha nova para recomeçar.");
+    setEstado("novo");
+  }, []);
+
+  const gravar = useCallback(async () => {
+    if (!chave) return;
+    if (gravando.current) { pendente.current = true; return; }
+    gravando.current = true;
+    try {
+      do {
+        pendente.current = false;
+        let atual = cofreRef.current;
+        for (let tentativa = 0; tentativa < 5; tentativa++) {
+          const remoto = await lerRemoto();
+          if (remoto && remoto.__zerado) { aplicarZeramento(); return; }
+          atual = fundir(atual, remoto);
+          const pacote = await empacotar(atual);
+          try { await guarda.gravar(CHAVE_COFRE, pacote); }
+          catch (e) { caiuParaMemoria(); await guarda.gravar(CHAVE_COFRE, pacote); }
+          if (guarda.modo !== "compartilhado") break;
+          const agora = await lerRemoto();
+          if (agora && agora.__zerado) { aplicarZeramento(); return; }
+          if (!agora) break;
+          const ids = new Set((agora.lancamentos || []).map((l) => l.id));
+          const idsF = new Set((agora.fixas || []).map((f) => f.id));
+          const completo = atual.lancamentos.every((l) => ids.has(l.id)) && atual.fixas.every((f) => idsF.has(f.id));
+          if (completo) { atual = fundir(atual, agora); break; }
+          await new Promise((res) => setTimeout(res, 120 + Math.random() * 200));
+        }
+        const local = fundir(cofreRef.current, atual);
+        if (JSON.stringify(local) !== JSON.stringify(cofreRef.current)) setCofre(local);
+      } while (pendente.current);
+    } catch (e) {
+      console.error("Falha ao gravar", e);
+    } finally {
+      gravando.current = false;
+    }
+    /* O outro celular pode ter gravado uma versão lida antes da minha e apagado
+       algo meu. Reconfere um instante depois e regrava só se faltar alguma coisa. */
+    if (guarda.modo === "compartilhado") {
+      clearTimeout(reconferir.current);
+      reconferir.current = setTimeout(async () => {
+        try {
+          const remoto = await lerRemoto();
+          if (remoto && remoto.__zerado) { aplicarZeramento(); return; }
+          if (!remoto) return;
+          const ids = new Set((remoto.lancamentos || []).map((l) => l.id));
+          const idsF = new Set((remoto.fixas || []).map((f) => f.id));
+          const meu = cofreRef.current;
+          const faltou = meu.lancamentos.some((l) => !ids.has(l.id)) || meu.fixas.some((f) => !idsF.has(f.id));
+          if (faltou) { gravar(); return; }
+          /* Nada meu sumiu: aproveita a leitura para trazer o que o outro lançou. */
+          const juntos = fundir(meu, remoto);
+          if (JSON.stringify(juntos) !== JSON.stringify(meu)) setCofre(juntos);
+        } catch (e) {}
+      }, 900);
+    }
+  }, [chave, empacotar, lerRemoto, aplicarZeramento]);
+
+  useEffect(() => {
+    if (estado !== "aberto" || !pronto.current) return;
+    const t = setTimeout(gravar, 250);
+    return () => clearTimeout(t);
+  }, [cofre, estado, gravar]);
+
+  useEffect(() => () => clearTimeout(reconferir.current), []);
+
+  const sincronizar = useCallback(async () => {
+    if (!chave || guarda.modo !== "compartilhado") return;
+    setSincronizando(true);
+    try {
+      const remoto = await lerRemoto();
+      if (remoto && remoto.__zerado) { aplicarZeramento(); return; }
+      if (remoto) setCofre((c) => { const f = fundir(c, remoto); return JSON.stringify(f) === JSON.stringify(c) ? c : f; });
+    } catch (e) { console.error("Falha ao sincronizar", e); }
+    finally { setSincronizando(false); }
+  }, [chave, lerRemoto, aplicarZeramento]);
+
+  /* bloqueio automático + sincronização ao voltar */
+  useEffect(() => {
+    if (estado !== "aberto") return;
+    const h = () => {
+      if (document.visibilityState === "hidden") { escondidoEm.current = Date.now(); return; }
+      const fora = escondidoEm.current ? Date.now() - escondidoEm.current : 0;
+      escondidoEm.current = null;
+      if (fora > BLOQUEIO_MS && guarda.modo !== "memoria") {
+        setChave(null); setBloqueado(true); setEditando(null); setNovaReceita(false);
+        setEstado("travado");
+        return;
+      }
+      sincronizar();
+    };
+    document.addEventListener("visibilitychange", h);
+    const t = setInterval(sincronizar, 20000);
+    return () => { document.removeEventListener("visibilitychange", h); clearInterval(t); };
+  }, [estado, sincronizar]);
+
+  const restaurarDeArquivo = async (texto) => {
+    try {
+      const pacote = JSON.parse(texto);
+      if (!pacote || !pacote.salt || !pacote.dados) throw new Error("formato");
+      setPacoteImportado(pacote); setErro(""); setEstado("travado");
+    } catch (e) { setErro("Este arquivo não é uma cópia de segurança do app."); }
+  };
+
+  const criarSenha = async (senha) => {
+    setErro("");
+    try {
+      const s = aleatorio(16);
+      const ch = await abrirChave(senha, s);
+      const pacote = JSON.stringify({ v: 2, salt: b64.enc(s), dados: await cifrar(ch, JSON.stringify(COFRE_VAZIO)) });
+      try { await guarda.gravar(CHAVE_COFRE, pacote); }
+      catch (e) { caiuParaMemoria(); await guarda.gravar(CHAVE_COFRE, pacote); }
+      setSalt(s); setChave(ch); setCofre(COFRE_VAZIO);
+      pronto.current = true; setEstado("aberto");
+    } catch (e) {
+      setErro("Não deu para criar a senha aqui. Detalhe técnico: " + (e && e.message ? e.message : String(e)));
+    }
+  };
+
+  const entrar = async (senha) => {
+    setErro("");
+    try {
+      let pacote = pacoteImportado;
+      if (!pacote) {
+        const r = await guarda.ler(CHAVE_COFRE);
+        if (!r || !r.value) { setEstado("novo"); return; }
+        pacote = JSON.parse(r.value);
+        if (!pacote || !pacote.dados) { setEstado("novo"); return; }
+      }
+      const s = b64.dec(pacote.salt);
+      const ch = await abrirChave(senha, s, modoDoBlob(pacote.dados));
+      const c = JSON.parse(await decifrar(ch, pacote.dados));
+      setSalt(s); setChave(ch);
+      setCofre(bloqueado ? fundir(cofreRef.current, c) : { ...COFRE_VAZIO, ...c });
+      if (pacoteImportado) {
+        try { await guarda.gravar(CHAVE_COFRE, JSON.stringify(pacoteImportado)); } catch (e) {}
+        setPacoteImportado(null);
+      }
+      setBloqueado(false);
+      pronto.current = true; setEstado("aberto");
+    } catch (e) {
+      /* A falha de decifração vem com mensagem técnica do navegador; só repassamos
+         as mensagens que nós mesmos escrevemos. */
+      const nossa = e && typeof e.message === "string" && /senha|navegador|formato/i.test(e.message);
+      setErro(nossa ? e.message : "Senha não confere.");
+    }
+  };
+
+  const trocarSenha = async (atual, nova) => {
+    try {
+      const r = await guarda.ler(CHAVE_COFRE);
+      const pacote = JSON.parse(r.value);
+      const chVelha = await abrirChave(atual, b64.dec(pacote.salt), modoDoBlob(pacote.dados));
+      await decifrar(chVelha, pacote.dados);
+      const sNovo = aleatorio(16);
+      const chNova = await abrirChave(nova, sNovo);
+      await guarda.gravar(CHAVE_COFRE, JSON.stringify({ v: 2, salt: b64.enc(sNovo), dados: await cifrar(chNova, JSON.stringify(cofre)) }));
+      setSalt(sNovo); setChave(chNova);
+      return { ok: true, texto: "Senha trocada. Avise a outra pessoa." };
+    } catch (e) {
+      return { ok: false, texto: "A senha atual não confere." };
+    }
+  };
+
+  /* itens de um mês: reais + recorrentes projetadas (sem os meses já ajustados) */
+  const itensDoMes = useCallback((mes) => {
+    const reais = cofre.lancamentos.filter((l) => chaveMes(l.data) === mes);
+    const ajustados = new Set(reais.filter((l) => l.recorrenteId).map((l) => l.recorrenteId));
+    const virtuais = cofre.fixas
+      .filter((f) => f.desde.slice(0, 7) <= mes && (!f.ate || f.ate >= mes) && !ajustados.has(f.id))
+      .map((f) => {
+        const [aa, mm] = mes.split("-").map(Number);
+        const ultimo = new Date(aa, mm, 0).getDate();
+        const dia = Math.min(Number(f.desde.slice(8, 10)) || 1, ultimo);
+        return { id: `rec-${f.id}-${mes}`, recorrenteId: f.id, tipo: f.tipo || "receita", valor: f.valor, tag: f.tag,
+          quem: f.quem, data: `${mes}-${String(dia).padStart(2, "0")}`, virtual: true,
+          ...(f.obs ? { obs: f.obs } : {}) };
+      });
+    return [...reais, ...virtuais];
+  }, [cofre]);
+
+  const itens = useMemo(() => itensDoMes(ym), [itensDoMes, ym]);
+  const itensAnt = useMemo(() => itensDoMes(mesAnterior(ym)), [itensDoMes, ym]);
+
+  const mesAtual = chaveMes(hojeISO());
+  const gastoNoMes = useMemo(() => {
+    const m = {};
+    itensDoMes(mesAtual).filter((i) => i.tipo === "gasto").forEach((i) => { m[i.tag] = (m[i.tag] || 0) + i.valor; });
+    return m;
+  }, [itensDoMes, mesAtual]);
+
+  const semana = useMemo(() => {
+    if (ym !== mesAtual) return null;
+    const d = (n) => { const x = new Date(); x.setDate(x.getDate() - n); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`; };
+    const ini = d(6), fimAnt = d(7), iniAnt = d(13);
+    const universo = [...new Set([mesAtual, chaveMes(iniAnt), chaveMes(ini)])].flatMap((m) => itensDoMes(m)).filter((i) => i.tipo === "gasto");
+    const atual = universo.filter((i) => i.data >= ini && i.data <= hojeISO()).reduce((s, i) => s + i.valor, 0);
+    const anterior = universo.filter((i) => i.data >= iniAnt && i.data <= fimAnt).reduce((s, i) => s + i.valor, 0);
+    const porCat = {};
+    universo.filter((i) => i.data >= ini && i.data <= hojeISO()).forEach((i) => { porCat[i.tag] = (porCat[i.tag] || 0) + i.valor; });
+    const top = Object.entries(porCat).sort((a, b) => b[1] - a[1])[0];
+    return { atual, anterior, maior: top ? tagPorId(top[0]).nome : "" };
+  }, [itensDoMes, ym, mesAtual]);
+
+  const fecharEdicao = useCallback(() => { setEditando(null); setNovaReceita(false); }, []);
+  const irParaLancar = useCallback(() => { setEditando(null); setNovaReceita(false); setAba(null); }, []);
+
+  useEffect(() => {
+    if (!festa) return;
+    const t = setTimeout(() => setFesta(null), 3700);
+    return () => clearTimeout(t);
+  }, [festa]);
+
+  const avisoTeto = (item) => {
+    if (item.tipo !== "gasto" || !cofre.tetos || !cofre.tetos[item.tag] || chaveMes(item.data) !== mesAtual) return null;
+    const teto = cofre.tetos[item.tag];
+    const total = (gastoNoMes[item.tag] || 0) + item.valor;
+    const nome = tagPorId(item.tag).nome;
+    if (total > teto) return `${nome} passou do teto: ${brl(total)} de ${brl(teto)}.`;
+    if (total >= teto * 0.8) return `${nome} chegou a ${Math.round((total / teto) * 100)}% do teto.`;
+    return null;
+  };
+
+  const salvar = (item, op) => {
+    const nome = nomeCat(item);
+    const eraEdicao = !!editando;
+    if (editando && editando.recorrente) {
+      if (op.escopo === "mes" && editando.instanciaMes) {
+        const real = { id: novoId(), tipo: item.tipo, valor: item.valor, tag: item.tag, quem: item.quem,
+          data: item.data, recorrenteId: editando.recorrenteId, ...(item.obs ? { obs: item.obs } : {}) };
+        setCofre((c) => ({ ...c, lancamentos: [...c.lancamentos, real] }));
+        avisar(`Ajustado só em ${rotuloMes(editando.instanciaMes)}.`);
+      } else {
+        setCofre((c) => ({ ...c, fixas: c.fixas.map((f) => f.id === editando.recorrenteId
+          ? { ...f, valor: item.valor, tag: item.tag, quem: item.quem, desde: item.data, obs: item.obs || undefined } : f) }));
+        avisar("Recorrente atualizado para todos os meses.");
+      }
+    } else if (op.repete && !editando) {
+      setCofre((c) => ({ ...c, fixas: [...c.fixas, { id: novoId(), tipo: item.tipo, valor: item.valor,
+        tag: item.tag, quem: item.quem, desde: item.data, ...(item.obs ? { obs: item.obs } : {}) }] }));
+      avisar(`${brl(item.valor)} de ${nome} vai repetir todo mês.`);
+      setFesta(Date.now());
+    } else {
+      const aviso = editando ? null : avisoTeto(item);
+      setCofre((c) => ({ ...c, lancamentos: editando
+        ? c.lancamentos.map((l) => (l.id === item.id ? { ...l, ...item, obs: item.obs || undefined } : l))
+        : [...c.lancamentos, item] }));
+      avisar(editando ? "Lançamento atualizado." : aviso || `${brl(item.valor)} em ${nome}. Lançado.`, !!aviso);
+      if (!editando) setFesta(Date.now());
+    }
+    setEditando(null);
+    setNovaReceita(false);
+    setYm(chaveMes(item.data));
+    if (!eraEdicao && aba && aba !== "mes") setAba(null);
+  };
+
+  const excluir = (item) => {
+    setCofre((c) => ({ ...c, lancamentos: c.lancamentos.filter((l) => l.id !== item.id), excluidos: [...c.excluidos, item.id] }));
+    avisar(`${brl(item.valor)} excluído.`, false, () => {
+      setCofre((c) => ({ ...c, lancamentos: [...c.lancamentos, item], excluidos: c.excluidos.filter((x) => x !== item.id) }));
+    });
+  };
+
+  const editar = (item) => {
+    if (item.virtual) {
+      const f = cofre.fixas.find((x) => x.id === item.recorrenteId);
+      if (!f) return;
+      setEditando({ id: f.id, recorrenteId: f.id, recorrente: true, instanciaMes: chaveMes(item.data),
+        tipo: f.tipo || "receita", valor: f.valor, tag: f.tag, quem: f.quem, data: item.data, obs: f.obs });
+    } else {
+      setEditando(item);
+    }
+  };
+
+  const editarRecorrente = (f) => setEditando({ id: f.id, recorrenteId: f.id, recorrente: true,
+    tipo: f.tipo || "receita", valor: f.valor, tag: f.tag, quem: f.quem, data: f.desde, obs: f.obs });
+
+  const encerrarRecorrente = (f) => {
+    const comecouEsteMes = f.desde.slice(0, 7) >= mesAtual;
+    const antes = cofre.fixas;
+    if (comecouEsteMes) {
+      setCofre((c) => ({ ...c, fixas: c.fixas.filter((x) => x.id !== f.id), excluidos: [...c.excluidos, f.id] }));
+    } else {
+      setCofre((c) => ({ ...c, fixas: c.fixas.map((x) => (x.id === f.id ? { ...x, ate: mesAtual } : x)) }));
+    }
+    avisar("Recorrente encerrado.", false, () => setCofre((c) => ({ ...c, fixas: antes, excluidos: c.excluidos.filter((x) => x !== f.id) })));
+  };
+
+  const mudarTeto = (id, centavos) => {
+    setCofre((c) => {
+      const tetos = { ...(c.tetos || {}) };
+      if (centavos > 0) tetos[id] = centavos; else delete tetos[id];
+      return { ...c, tetos };
+    });
+  };
+
+  const exportar = () => {
+    const meses = new Set(cofre.lancamentos.map((l) => chaveMes(l.data)));
+    meses.add(ym);
+    if (cofre.fixas.length) {
+      let m = cofre.fixas.map((f) => f.desde.slice(0, 7)).sort()[0];
+      const fim = ym > mesAtual ? ym : mesAtual;
+      let n = 0;
+      while (m <= fim && n++ < 400) { meses.add(m); m = mesSeguinte(m); }
+    }
+    const todos = [...meses].sort().flatMap((m) => itensDoMes(m)).sort((a, b) => a.data.localeCompare(b.data));
+
+    const linhas = todos.map((i) => ({
+      Data: i.data.split("-").reverse().join("/"),
+      "Mês": rotuloMes(chaveMes(i.data)),
+      Tipo: i.tipo === "gasto" ? "Gasto" : "Receita",
+      Categoria: nomeCat(i),
+      "Quem pagou": i.quem,
+      Valor: i.valor / 100,
+      Recorrente: i.virtual ? "Sim" : i.recorrenteId ? "Ajustado" : "Não",
+      "Observação": i.obs || "",
+    }));
+
+    const acc = {};
+    todos.forEach((i) => {
+      const k = chaveMes(i.data) + "|" + (i.tipo === "gasto" ? "Gasto" : "Receita") + "|" + nomeCat(i);
+      acc[k] = (acc[k] || 0) + i.valor;
+    });
+    const resumo = Object.entries(acc).sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => {
+      const [m, tipo, c] = k.split("|");
+      const tag = TAGS.find((t) => t.nome === c);
+      const teto = tipo === "Gasto" && tag && cofre.tetos && cofre.tetos[tag.id] ? cofre.tetos[tag.id] / 100 : "";
+      return { "Mês": rotuloMes(m), Tipo: tipo, Categoria: c, Valor: v / 100, Teto: teto,
+        "% do teto": teto ? Math.round((v / 100 / teto) * 100) + "%" : "" };
+    });
+
+    const porMes = {};
+    todos.forEach((i) => {
+      const m = chaveMes(i.data);
+      porMes[m] = porMes[m] || { r: 0, g: 0 };
+      if (i.tipo === "gasto") porMes[m].g += i.valor; else porMes[m].r += i.valor;
+    });
+    const saldos = Object.entries(porMes).sort().map(([m, v]) => ({
+      "Mês": rotuloMes(m), Entrou: v.r / 100, Saiu: v.g / 100, Sobrou: (v.r - v.g) / 100,
+    }));
+
+    const wb = XLSX.utils.book_new();
+    const w1 = XLSX.utils.json_to_sheet(linhas);
+    w1["!cols"] = [{wch:12},{wch:20},{wch:10},{wch:16},{wch:14},{wch:12},{wch:12},{wch:34}];
+    XLSX.utils.book_append_sheet(wb, w1, "Lançamentos");
+    const w2 = XLSX.utils.json_to_sheet(resumo);
+    w2["!cols"] = [{wch:20},{wch:10},{wch:16},{wch:12},{wch:10},{wch:10}];
+    XLSX.utils.book_append_sheet(wb, w2, "Por categoria");
+    const w3 = XLSX.utils.json_to_sheet(saldos);
+    w3["!cols"] = [{wch:20},{wch:12},{wch:12},{wch:12}];
+    XLSX.utils.book_append_sheet(wb, w3, "Saldo por mês");
+
+    const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    baixarArquivo(`contas-da-casa-${hojeISO()}.xlsx`,
+      new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+    setCofre((c) => ({ ...c, ultimoExport: hojeISO() }));
+  };
+
+  const salvarCopia = async () => {
+    baixarArquivo(`contas-da-casa-copia-${hojeISO()}.json`,
+      JSON.stringify({ v: 2, salt: b64.enc(salt), dados: await cifrar(chave, JSON.stringify(cofre)) }, null, 2));
+  };
+
+  const lerCopia = async (texto) => {
+    let pacote;
+    try {
+      pacote = JSON.parse(texto);
+      if (!pacote || !pacote.salt || !pacote.dados) throw new Error("formato");
+    } catch (e) { return { ok: false, texto: "Este arquivo não é uma cópia de segurança do app." }; }
+    try {
+      const outro = JSON.parse(await decifrar(chave, pacote.dados));
+      const novos = (outro.lancamentos || []).filter((l) => !cofre.lancamentos.some((x) => x.id === l.id)).length;
+      setCofre((c) => fundir(c, outro));
+      return { ok: true, texto: novos === 0 ? "Cópia lida. Nenhum lançamento novo." : `Cópia juntada. ${novos} lançamento(s) novo(s).` };
+    } catch (e) { return { ok: false, texto: "A cópia foi feita com outra senha e não pôde ser aberta aqui." }; }
+  };
+
+  const zerarTudo = async () => {
+    pronto.current = false;
+    clearTimeout(reconferir.current);
+    try {
+      if (guarda.modo === "compartilhado") {
+        /* Marca o apagamento em vez de só remover: se o outro celular estiver
+           com o app aberto, ele detecta a marca e se zera também. */
+        await guarda.gravar(CHAVE_COFRE, JSON.stringify({ v: 2, zerado: Date.now() }));
+      } else if (guarda.modo === "pessoal") {
+        try { await window.storage.delete(CHAVE_COFRE, guarda.shared); }
+        catch (e) { await guarda.gravar(CHAVE_COFRE, JSON.stringify({ v: 2, zerado: Date.now() })); }
+      } else if (guarda.modo === "navegador") {
+        window.localStorage.removeItem(CHAVE_COFRE);
+      } else {
+        await guarda.gravar(CHAVE_COFRE, "");
+      }
+    } catch (e) { console.error("Falha ao apagar", e); }
+    setConfirmandoZerar(false);
+    setChave(null); setSalt(null); setCofre(COFRE_VAZIO);
+    setEditando(null); setNovaReceita(false); setPacoteImportado(null);
+    setBloqueado(false); setAba(null); setErro("");
+    setYm(chaveMes(hojeISO()));
+    setEstado("novo");
+  };
+
+  const precisaBackup = useMemo(() => {
+    if (cofre.lancamentos.length < 5) return false;
+    if (!cofre.ultimoExport) return true;
+    return (Date.now() - new Date(cofre.ultimoExport + "T12:00:00").getTime()) / 86400000 > 30;
+  }, [cofre]);
+
+  /* ------------------------------ render ------------------------------ */
+
+  if (estado === "carregando") {
+    return (
+      <Moldura semNav toast={toast} onDesfazer={desfazer}>
+        <div className="corpo" style={{ paddingTop: 90, textAlign: "center" }}>
+          <ArtePote w={170} />
+          <p className="t-rot" style={{ marginTop: 14 }}>Abrindo</p>
+        </div>
+      </Moldura>
+    );
+  }
+
+  if (estado !== "aberto") {
+    return (
+      <Moldura semNav toast={toast} onDesfazer={desfazer}>
+        <Cadeado primeiroAcesso={estado === "novo"} onCriar={criarSenha} onEntrar={entrar}
+          erro={erro} ambiente={ambiente} onRestaurar={restaurarDeArquivo} bloqueado={bloqueado} />
+      </Moldura>
+    );
+  }
+
+  const abas = [
+    { id: "mes",     nome: "Mês",         Icon: PieChart },
+    { id: "lista",   nome: "Lançamentos", Icon: List },
+    { id: "ajustes", nome: "Ajustes",     Icon: Settings },
+  ];
+
+  return (
+    <Moldura toast={toast} onDesfazer={desfazer} festa={festa}>
+      {editando ? (
+        <Lancar key={editando.id + (editando.instanciaMes || "")} cofre={cofre} editando={editando} onSalvar={salvar} onFechar={fecharEdicao} gastoNoMes={gastoNoMes} />
+      ) : novaReceita ? (
+        <Lancar key="receita" cofre={cofre} modo="receita" onSalvar={salvar} onFechar={fecharEdicao} gastoNoMes={gastoNoMes} />
+      ) : (
+        <>
+          {!aba && <Lancar key="novo" cofre={cofre} onSalvar={salvar} gastoNoMes={gastoNoMes} />}
+          {aba === "mes" && (
+            <Mes ym={ym} setYm={setYm} itens={itens} itensAnt={itensAnt} semana={semana} tetos={cofre.tetos || {}}
+              precisaBackup={precisaBackup} irAjustes={() => setAba("ajustes")}
+              sincronizar={sincronizar} sincronizando={sincronizando} ambiente={ambiente} onNovoGasto={irParaLancar} />
+          )}
+          {aba === "lista" && <Lista ym={ym} setYm={setYm} itens={itens} onExcluir={excluir} onEditar={editar} onNovoGasto={irParaLancar} />}
+          {aba === "ajustes" && (
+            <Ajustes cofre={cofre} setCofre={setCofre} exportar={exportar} trocarSenha={trocarSenha}
+              ambiente={ambiente} salvarCopia={salvarCopia} lerCopia={lerCopia}
+              onEditarRecorrente={editarRecorrente} onEncerrarRecorrente={encerrarRecorrente}
+              onNovaReceita={() => setNovaReceita(true)} onMudarTeto={mudarTeto} avisar={avisar}
+              onNovoGasto={irParaLancar} onPedirZerar={() => setConfirmandoZerar(true)} />
+          )}
+        </>
+      )}
+
+      {confirmandoZerar && (
+        <ConfirmarZerar onCancelar={() => setConfirmandoZerar(false)} onConfirmar={zerarTudo}
+          resumo={{ lancamentos: cofre.lancamentos.length, recorrentes: cofre.fixas.length,
+            tetos: Object.keys(cofre.tetos || {}).length }} />
+      )}
+
+      <nav className="nav">
+        {abas.map((a) => (
+          <button key={a.id} data-on={aba === a.id && !editando && !novaReceita ? "1" : "0"}
+            onClick={() => { setEditando(null); setNovaReceita(false); setAba(a.id); sincronizar(); }}>
+            <a.Icon size={21} strokeWidth={aba === a.id ? 2.4 : 1.9} />
+            {a.nome}
+          </button>
+        ))}
+      </nav>
+    </Moldura>
+  );
+}
