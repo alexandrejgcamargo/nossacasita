@@ -2,7 +2,7 @@
    A página (index.html) vem sempre da internet quando dá; sem conexão (ou se a rede
    demorar mais de 4 segundos), abre a última cópia guardada. Ícones e manifesto ficam
    guardados. Nada dos lançamentos passa por aqui: eles vão cifrados direto para a nuvem. */
-const CACHE = "casita-17.8";
+const CACHE = "casita-17.18";
 const BASICOS = ["./", "manifest.webmanifest", "icone-180.png", "icone-192.png", "icone-512.png"];
 
 self.addEventListener("install", (e) => {
