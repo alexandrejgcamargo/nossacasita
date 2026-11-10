@@ -2,15 +2,33 @@
    A página (index.html) vem sempre da internet quando dá; sem conexão (ou se a rede
    demorar mais de 4 segundos), abre a última cópia guardada. Ícones e manifesto ficam
    guardados. Nada dos lançamentos passa por aqui: eles vão cifrados direto para a nuvem. */
-const CACHE = "casita-17.33";
+const CACHE = "casita-17.38";
 const BASICOS = ["./", "manifest.webmanifest", "icone-180.png", "icone-192.png", "icone-512.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(BASICOS)).catch(() => {}).then(() => self.skipWaiting()));
 });
 
+/* v17.36: o leitor de PDF (leitor-pdf.js, 1,4 MB) não muda de versão para versão: antes de apagar a
+   cópia antiga do app, leva o leitor para a nova, para não baixar de novo. O app confere a impressão digital
+   do arquivo a cada uso; se o leitor mudar, o app pede de novo com um endereço novo (?v=...). */
+async function herdarLeitor(ks) {
+  try {
+    const novo = await caches.open(CACHE);
+    for (const k of ks) {
+      if (!k.startsWith("casita-") || k === CACHE) continue;
+      const velho = await caches.open(k);
+      for (const req of await velho.keys()) {
+        if (!new URL(req.url).pathname.endsWith("/leitor-pdf.js")) continue;
+        if (await novo.match(req)) continue;
+        const r = await velho.match(req); if (r) await novo.put(req, r);
+      }
+    }
+  } catch (e) { /* sem herança: baixa de novo quando precisar */ }
+}
 self.addEventListener("activate", (e) => {
   e.waitUntil(caches.keys()
+    .then((ks) => herdarLeitor(ks).then(() => ks))
     .then((ks) => Promise.all(ks.filter((k) => k.startsWith("casita-") && k !== CACHE).map((k) => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
