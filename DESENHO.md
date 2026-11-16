@@ -1,4 +1,4 @@
-# Guia de desenho da casita (v17.41)
+# Guia de desenho da casita (v17.46)
 
 Regras para que todo desenho novo pareça feito pela mesma mão dos que já existem.
 
@@ -90,3 +90,36 @@ Todo estilo usa as escalas definidas em `src/ui/estilos.js` (`:root`). Valor sol
 - **Pesos**: 400 texto, 600 apoio, 700 forte, 800 título, 900 número.
 - **Sombras**: `--sombra-1` (rente), `--sombra` (cartão), `--sombra-3` (flutua); `--sombra-papel-1/2/3` para papéis e adesivos. As três primeiras mudam no tema escuro. Sombras que são parte de um desenho (anel, borda dura de botão, luz) ficam escritas no próprio desenho.
 - **Contorno dos desenhos**: `#22323A` em todas as cenas, ícones e faixas.
+
+## v17.42
+- **Regra nova (casa larga do computador)**: tudo o que cobre o céu (véu da chuva, clarão da trovoada, grão de papel) precisa cobrir também as sobras da tela dos lados do desenho. O desenho tem proporção fixa (1440 × 900); em tela mais larga sobra fundo dos lados, e um efeito só sobre o desenho vira faixa. `testes/v17_42.py` compara a cor do céu dentro e fora do desenho.
+
+## v17.43
+- **Casa viva nos cômodos** (`CasaDesenho`, vale para a casa lateral e a larga): `escuro` vai de 0 a 1 conforme a luz do dia; as lâmpadas (`.cs-lampada`) acendem aos poucos e os cômodos acesos perdem um pouco de luz natural. Sol pela janela da sala (`.cs-raio-sol`), pingos no vidro em dia de chuva, vapor da chaleira, foguete e carrinhos no quarto do Caê.
+- **Proporção**: Xan e Isa na sala em escala .74 (antes .42); Caê em .56.
+- **Fachada** (`fachada.js`, `Fachada` em `CasaDesenho`): parede de tábuas `#F7E9D7` com linhas `#EAD6BD`; uma janela por cômodo com cortina na cor do cômodo e floreira; porta da rua no cômodo do térreo (Mercado); óculo no sótão. As janelas acendem com `escuro`. As plaquinhas com os nomes ficam, e clicar continua abrindo o cômodo.
+- **Caminha da Marie**: lilás `#C8B6E2` com almofada `#FFF7EC`, nas três cenas (quintal do celular, casa lateral, casa larga).
+- **Contas**: `--gasto` (vermelho) e `--receita` (verde) para valores; `--p1` (Xan) e `--p2` (Isa) para quem pagou. Cor nunca vai sozinha: o nome e o sinal de + continuam escritos.
+- **Nomes de classe**: antes de criar uma classe `cs-*` nova, conferir se já existe em `estilosLargo.js` (`cs-fogo`, `cs-vapor` e `cs-luzinha` já existiam; `estilos_repetidos.py` acusa).
+
+## v17.44
+- **Fachada única**: a casa fechada (lateral e larga) usa as mesmas peças da casa da entrada, geradas por `arte/entrada_larga.py` em `FACHADA` (`entradaArte.js`): `defs` (padrões `fx*`), uma janela por cômodo (dia e noite), `porta` (varanda, porta em arco, luminárias, degraus) e `oculo`. Nunca redesenhar a fachada à mão: mudar a entrada e rodar o script muda as três.
+- Escalas: casa lateral .62 (janelas em `FX_JANELAS`), casa larga 1.55 nas janelas e 1.1 na porta. Na larga, o Mercado é a porta, no meio do térreo, como na entrada.
+- De noite, véu `#0B1C2E` a .38 sobre telhado e paredes, com as janelas acesas por cima (como na entrada).
+- **Mini jogo da entrada** (`miniJogo.jsx`): borboletas de dia, vaga-lumes de noite, cinco por rodada. Não usa nada da família, não tira o foco da senha, some com animações pausadas.
+- **Sótão vivo**: ET verde no baú (`cs-et`), notas do rádio, aranha, ratinho, foto que pula. **Contas vivas**: moeda no porquinho, pote que enche com a sobra do mês, folha do calendário, fitinha da calculadora, abajur que acende. Tudo por ações sorteadas (`ATORES_CASA`, `ATORES_LARGA`).
+- **Lançar**: Gasto em `--gasto` (vermelho) e Receita em `--receita` (verde) na aba, na caixa do valor e no botão. Botões cheios usam `--gasto-forte` / `--receita-forte` com texto branco.
+
+## v17.45
+- **Animações**: `animation-play-state: var(--anima, var(--anima-sala, running))` em tudo (estilos.js, primeira camada, !important). `--anima: paused` com "Pausar animações" e em `[data-fora]` (cena fora da tela, `naTela.js`). Por ser variável herdada, alcança as cópias feitas com `<use>` da casa larga, que seletores como `.cc *` não alcançam.
+- **`--anima-sala`**: diz de que cômodo é cada desenho animado da casa (regras em chuvaArte.jsx; o vapor da sala e o da cozinha marcados em `ARTE_FIXA_SALAS`). Cada recorte da casa larga pausa os outros cômodos (`--q-*: paused`). Animação nova na casa: marcar o cômodo dela.
+- **Faixas**: `faixasCasa.jsx` (Caê, Lazer, Nós dois e `FaixaDoComodo` para o computador). Linhas soltas com a classe `faixa-linha` (branca no cabeçalho colorido do celular, `#9FB4BC` no fundo claro do computador).
+- **Pessoas pela hora**: Xan nas Contas (dias 1 a 10, 8h às 20h), Isa lendo (19h à 1h), Caê brincando (13h às 18h).
+- **Faxina**: `arte/faxina.py` junta num arquivo só as regras de uma classe; `testes/_fotos.py` + `testes/_difere.py` conferem pixel a pixel antes e depois.
+
+## v17.46 (vistoria)
+- Campo de valor: entrar com valor escrito seleciona tudo; o cursor fica sempre no fim; mais de 9 dígitos é recusado com aviso na dica.
+- Campos com limite de letras mostram "Faltam N letras" perto do limite (`ContaLetras`, já dentro de `Campo`).
+- Rodapé da casa lateral: em lateral estreita (container query), "Fechar" e "Atalhos" ficam só com o ícone (nome no aria-label e no title).
+- Botão flutuante de anotar (Lazer, Mia e Marie) só aparece quando os botões de anotar da tela estão fora da vista (`useAlgumNaTela`).
+- Hover das abas do computador no tema escuro: `rgba(255,255,255,.09)`.
