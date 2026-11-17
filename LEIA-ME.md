@@ -1,4 +1,4 @@
-# Nossa casita · v17.46 (15/11/2026)
+# Nossa casita · v17.47 (17/11/2026)
 
 **Visto no aparelho:** não. ( ) iPhone ( ) Android ( ) computador
 
@@ -6,29 +6,33 @@
 - `index.html`
 - `sw.js`
 
-`capa.png` e `leitor-pdf.js` não mudaram desde a v17.41. `AUDITORIA-v17.45.md` é o relatório do auditor independente, só para leitura (não suba).
+`capa.png` e `leitor-pdf.js` não mudaram.
 
-## Como foi a vistoria
-- **Própria:** varredura automática de todas as telas em 6 tamanhos (320, 390 e 768 no celular; 1280, 1440 e 1920 no computador), nos dois temas, procurando rolagem para o lado, elementos fora da tela, texto cortado, botões pequenos, imagens quebradas, contraste e erros de console; depois, o mouse passado sobre cada botão do computador e o foco do teclado com Tab.
-- **Independente:** um auditor separado, sem ver meu trabalho, usou o site como uma pessoa usaria, por cerca de 25 minutos (relatório anexo).
+## O que mudou: fatura aberta do Nubank nas Contas
+- **Formatos:** o CSV (`date,title,amount`, valor entre aspas com vírgula: `"240,89"`, `"- 8.967,81"`) e o PDF da fatura aberta (a mesma planilha impressa). A fatura fechada em PDF continua sendo lida como antes.
+- **Onde:** no celular, Contas > Importar print de gastos > Fatura do mês. No computador, arrastar o arquivo, ou Vários > Ler a fatura (PDF ou CSV).
+- **Mês:** cada gasto entra no dia da compra, no mês da compra (novembro), mesmo que o dinheiro saia da conta em dezembro. O mês da conferência vem automaticamente o das compras.
+- **Parcelas:** contam no mês, com o número delas (ex.: Zara, parcela 3 de 3, em 01/11).
+- **Estornos e créditos:** entram como receita, na categoria nova "Estorno".
+- **Pagamento da fatura anterior** ("Pagamento recebido"): fica de fora.
+- **Importar de novo ao longo do mês:** o app guarda uma impressão digital de cada linha (pessoa, dia, loja, valor, parcela e a vez em que a linha se repete no arquivo). Na próxima importação, só o que é novo aparece. Três ônibus iguais no mesmo dia continuam sendo três; um quarto, depois, entra como novo. CSV e PDF da mesma fatura dão a mesma impressão digital.
+- **Xan e Isa:** cada um importa a sua fatura escolhendo "De quem é a fatura". A impressão digital é por pessoa: a fatura de um não esconde a do outro. Proteção: se a Isa abrir uma linha idêntica a uma que o Xan já importou (mesmo dia, loja, valor), ela vem desmarcada com "já importado na fatura de Xan", para evitar importar a fatura do outro por engano.
+- **Categorias:** sugeridas pelo nome, conferidas na lista antes de lançar (como antes).
+- **Fatura inteira:** ao escrever "fatura", "pagamento do cartão" e afins num gasto, o app avisa antes de lançar. Se um lançamento assim já existe no mês, aparece um aviso no topo das Contas pedindo para apagar e importar as compras, cada uma no seu dia.
 
-## Corrigido
-1. **Valor das Contas (gravidade média):** ao tocar num valor já escrito e digitar, os números novos se juntavam aos antigos no meio (R$ 8.500,00 + "120000" virava R$ 8.500.100,20) e o que passava de 9 dígitos era cortado em silêncio. Agora, entrar no campo seleciona o valor (digitar troca), os números entram sempre pelo fim e passar do máximo mostra "O valor máximo é R$ 9.999.999,99".
-2. **Painel de lançar no computador (média):** depois de lançar, ele ficava rolado para baixo e o Valor sumia, mesmo saindo e voltando às Contas. Agora volta ao topo depois de lançar e sempre que as Contas abrem.
-3. **Mercado no computador:** "nada no carrinho ainda" aparecia com itens no carrinho. Agora conta o carrinho de agora.
-4. **Rodapé da casa lateral em 1024 px:** os botões ficavam cortados. Em lateral estreita, "Fechar" e "Atalhos" ficam só com o ícone.
-5. **Lousa no celular:** o recado no quadradinho do dia quebrava no meio da palavra ("Busc/ar"). Agora quebra entre palavras.
-6. **Botão flutuante de anotar (Lazer, Mia e Marie):** em telas baixas cobria o "Anotar" da própria tela. Agora só aparece quando os botões da tela saem da vista.
-7. **Limite de letras sem aviso:** nomes longos paravam de entrar sem explicação (caixinha em 24, item do Mercado em 80). Perto do limite aparece "Faltam N letras".
-8. **Leitor de tela:** os ícones de categoria eram lidos sem acento ("saude", "coracao"). Corrigido.
-9. **Barra de baixo do Caê em 320 px:** os rótulos se encostavam ("CrescerCaderno"). Letra menor só em telas estreitas.
-10. **Achado da vistoria própria, tema escuro no computador:** com o mouse sobre uma aba não selecionada (Caê, Mercado, Mia e Marie, Nós dois), o fundo ficava cinza médio e o texto claro quase sumia (contraste 2,9). Corrigido.
+## Testado com a sua fatura (16/11 e 17/11, fora do pacote)
+- CSV: 107 linhas = 105 gastos + 1 estorno (IOF devolvido, R$ 33,82) + o pagamento (de fora). O PDF dá exatamente as mesmas 106 linhas e as mesmas impressões digitais.
+- Gastos de novembro lançados: R$ 7.258,51 (a compra de 31/10, R$ 16,00, vem desmarcada como de outubro).
+- Sequência: CSV até 15/11 → PDF completo (só as 15 linhas de 16 e 17/11 aparecem) → CSV completo (nada novo).
+
+## Atenção
+- **IOF:** na sua fatura, "IOF de compra internacional" (R$ 33,82, gasto, 04/11) e "IOF de volta de Anthropic" (R$ 33,82, estorno, 03/11) entram os dois, e se anulam no saldo, como você definiu.
+- **A compra de 31/10 vai reaparecer** desmarcada em cada importação, até alguém lançá-la (em outubro) ou não. Ela não é perdida nem duplicada.
+- **Lançamentos importados antes desta versão** não têm impressão digital. Se uma linha antiga coincidir em valor e data próxima, ela vem como "parece já lançado", desmarcada, como antes.
+- **Se alguém editar** o valor ou o nome de um gasto importado, a impressão digital continua a da linha original. Reimportar não duplica.
+- **Apagar** um gasto importado faz ele voltar na próxima importação da mesma fatura.
 
 ## Testes
-- Novo: `testes/v17_46.py` (os 10 itens acima).
+- Novo: `testes/v17_47.py`, com a fatura real.
+- `v17_23` atualizado: o estorno agora entra como receita, e o que já foi importado some em vez de vir como "parece já lançado".
 - Bateria completa: tudo certo, menos `importar` e `v17_25` (limitação do ambiente de teste, como sempre).
-- Na primeira rodada da bateria, a correção 4 tinha quebrado outra coisa (a casa lateral deixava de caber na altura da tela). Refeita do jeito descrito acima e rodada a bateria inteira de novo.
-
-## Não verificado
-- Aparelho real e site publicado.
-- O auditor não testou: importar print e PDF, impressão, troca de senha, restaurar de um dia, a tranca depois de 5 minutos, o estilo "pintado", gestos de arrastar e uso sem internet.
